@@ -1,0 +1,26 @@
+<div class="mb-6 rounded-lg p-4">
+  <!-- <h2 class="text-xl font-semibold text-white mb-4">Browse by Genre</h2> -->
+
+  @if (loadingGenres) {
+    <div class="text-gray-400 text-center py-4">
+      Loading genres...
+    </div>
+  }
+
+  @if (!loadingGenres && genres.length > 0) {
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      @for (genre of genres; track genre) {
+        <button
+          (click)="onGenreClick(genre)"
+          class="capsule">
+          <div class="font-medium text-sm truncate group-hover:text-emerald-100">
+            {{ genre.genre.name || "genre not specified" }}
+          </div>
+          <div class="text-xs text-gray-300 mt-1">
+            {{ genre.count }} {{ genre.count === 1 ? 'score' : 'scores' }}
+          </div>
+        </button>
+      }
+    </div>
+  }
+</div>

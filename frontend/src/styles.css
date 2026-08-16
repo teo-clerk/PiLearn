@@ -1,0 +1,401 @@
+/* You can add global styles to this file, and also import other style files */
+
+@import "tailwindcss";
+
+@theme {
+	--font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+		Oxygen, Ubuntu, Cantarell, "Open Sans", sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+		"Liberation Mono", "Courier New", monospace;
+
+	--font-swiss911: "Swiss911", sans-serif;
+	--font-lcd: "5x8 LCD", monospace;
+
+	--text-xs: 0.875rem;
+	--text-xs--line-height: 1.3;
+	--text-sm: 1rem;
+	--text-sm--line-height: 1.4;
+	--text-base: 1.125rem;
+	--text-base--line-height: 1.5;
+	--text-lg: 1.25rem;
+	--text-lg--line-height: 1.5;
+	--text-xl: 1.375rem;
+	--text-xl--line-height: 1.5;
+	--text-2xl: 1.625rem;
+	--text-2xl--line-height: 1.4;
+	--text-3xl: 2rem;
+	--text-3xl--line-height: 1.3;
+}
+
+@layer components {
+	.btn {
+		@apply rounded-sm font-bold py-2 px-6 tracking-[0.075em] bg-neutral-700 text-white
+		       transition-all duration-200 cursor-pointer hover:bg-neutral-600
+		       active:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-primary {
+		@apply inline-flex items-center rounded-sm font-bold py-2 px-6 text-sm tracking-[0.075em] border transition-all duration-200
+		       bg-neutral-200/10 border-neutral-600 text-neutral-200
+		       hover:bg-neutral-200/20 hover:border-neutral-400
+		       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/50
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-secondary {
+		@apply inline-flex items-center rounded-sm font-bold py-2 px-6 text-sm tracking-[0.075em] border border-zinc-600
+		       text-white transition-colors duration-200 cursor-pointer
+		       bg-zinc-700 hover:bg-zinc-600 hover:border-zinc-500 active:bg-zinc-800
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-success {
+		@apply inline-flex items-center rounded-sm font-bold py-2 px-6 text-sm tracking-[0.075em] border border-transparent
+		       text-white transition-colors duration-200 cursor-pointer
+		       bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-danger {
+		@apply inline-flex items-center rounded-sm font-bold py-2 px-6 text-sm tracking-[0.075em] border border-transparent
+		       text-white transition-colors duration-200 cursor-pointer
+		       bg-red-400 hover:bg-red-500 active:bg-red-300
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-hero {
+		@apply inline-flex items-center rounded-sm font-bold py-2 px-6 text-sm tracking-[0.075em] border border-transparent
+		       text-white transition-all duration-200 cursor-pointer
+		       bg-red-600 hover:bg-red-500 active:bg-red-700
+		       shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.btn-small {
+		@apply px-3 py-1.5 rounded-sm font-medium text-sm text-white
+		       transition-colors duration-200 cursor-pointer
+		       bg-red-600 hover:bg-red-500 active:bg-red-700
+		       disabled:opacity-40 disabled:cursor-not-allowed;
+	}
+
+	.capsule {
+		@apply bg-neutral-700 hover:bg-emerald-600 text-white rounded-lg p-3 border  border-emerald-500/50 transition-colors;		
+	}
+
+	.capsule-primary {
+		@apply font-bold py-2 px-6 tracking-[0.075em] border transition-all duration-200 bg-emerald-500/10 border-emerald-500/50 text-emerald-400;
+	}
+
+	.card {
+		@apply border  p-4;
+	}
+
+	.card-primary {
+		@apply bg-neutral-800 border rounded-lg border-neutral-700  text-white;
+	}
+
+	.card-secondary {
+		@apply bg-neutral-800 m-2 mr-0 p-4 border rounded-sm border-neutral-700 text-white;
+	}
+
+	.section-label {
+		@apply text-xs font-semibold uppercase tracking-widest text-neutral-400;
+	}
+
+	.card-secondary-title {
+		@apply text-sm font-bold uppercase tracking-widest text-neutral-400 mb-4;
+	}
+
+	.item-title {
+		@apply text-lg font-semibold text-white mb-2;
+	}
+
+	.link-primary {
+		@apply font-semibold no-underline text-red-400 hover:text-red-300  decoration-red-500/50 hover:decoration-red-300 transition-colors;
+	}
+
+
+	.link-secondary {
+		@apply text-blue-400 hover:text-red-300 underline decoration-blue-500/50 hover:decoration-red-300 transition-colors;
+	}
+
+	.link-alt {
+		@apply text-red-300 hover:text-red-200 underline text-sm decoration-red-400/50 hover:decoration-red-200 transition-colors;
+	}
+
+	.input-field {
+		@apply w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-sm
+		       text-neutral-200 placeholder:text-neutral-500
+		       focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30
+		       transition-all duration-200;
+	}
+
+	.field-label {
+		@apply text-xs font-semibold uppercase tracking-widest text-neutral-400;
+	}
+
+	.text-error {
+		@apply text-red-500;
+	}
+
+	.text-info {
+		@apply text-blue-400;
+	}
+
+	.text-info-dark {
+		@apply text-blue-600;
+	}
+
+	.text-success {
+		@apply text-emerald-400;
+	}
+
+	.text-muted {
+		@apply text-gray-400;
+	}
+
+	.text-muted-light {
+		@apply text-neutral-300;
+	}
+
+	.border-muted {
+		@apply border-neutral-600;
+	}
+
+	.border-dark {
+		@apply border-neutral-800;
+	}
+
+	.alert-error {
+		@apply bg-red-100 border border-red-400 text-red-700 p-3 rounded-lg;
+	}
+
+	.bg-strength-weak {
+		@apply bg-red-500;
+	}
+
+	.bg-strength-medium {
+		@apply bg-yellow-500;
+	}
+
+	.bg-strength-strong {
+		@apply bg-emerald-500;
+	}
+
+	.bg-strength-off {
+		@apply bg-gray-200;
+	}
+
+	.spinner {
+		@apply animate-spin inline-block border-4 border-current border-t-transparent rounded-full;
+	}
+
+	/* ── Shared exercise page layout ────────────────────────── */
+
+	.exercise-page {
+		@apply px-4 sm:px-6 pt-4 pb-12 flex flex-col flex-1;
+	}
+
+	.exercise-body {
+		@apply flex flex-col md:flex-row gap-8 md:gap-10 mt-6;
+	}
+
+	.exercise-controls {
+		@apply flex flex-col gap-4 w-full md:w-80 shrink-0;
+	}
+
+	.exercise-desc {
+		@apply flex-1 min-w-0;
+	}
+
+	.exercise-desc-card {
+		@apply bg-neutral-800/50 border border-neutral-700/60 rounded-sm flex flex-col;
+	}
+
+	.exercise-desc-section {
+		@apply px-5 py-4;
+	}
+
+	.exercise-desc-label {
+		@apply text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-2;
+	}
+
+	.exercise-desc-text {
+		@apply text-sm text-neutral-400 leading-relaxed whitespace-pre-wrap;
+	}
+
+	.exercise-desc-divider {
+		@apply border-t border-neutral-700/60;
+	}
+
+	/* ── CTA below the exercise body ── */
+	.exercise-cta {
+		@apply mt-6;
+	}
+}
+
+
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	@apply bg-neutral-900 text-neutral-200;
+}
+
+/* Custom fonts */
+@font-face {
+	font-family: "5x8 LCD";
+	src: url("/assets/fonts/5x8_lcd_hd44780u_a02.eot") format("eot"),
+		url("/assets/fonts/5x8_lcd_hd44780u_a02.woff") format("woff"),
+		url("/assets/fonts/5x8_lcd_hd44780u_a02.ttf") format("truetype"),
+		url("/assets/fonts/5x8_lcd_hd44780u_a02.svg#5x8-LCD-HD44780U-A02") format("svg");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+	ascent-override: 88%;
+	descent-override: 12%;
+	line-gap-override: 0%;
+	size-adjust: 100%;
+}
+
+@font-face {
+	font-family: "Swiss911";
+	src: url("/assets/fonts/Swiss911.otf") format("truetype");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+	ascent-override: 92%;
+	descent-override: 8%;
+	line-gap-override: 0%;
+	size-adjust: 98%;
+}
+
+/* Form elements */
+input[type="checkbox"] {
+	@apply relative shrink-0 w-6 h-6 border-2 border-zinc-600 rounded-md bg-zinc-900 checked:bg-red-600 checked:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/70;
+}
+
+/* Select — custom dark arrow, no OS chrome */
+select.input-field {
+	appearance: none;
+	-webkit-appearance: none;
+	color-scheme: dark;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.75rem center;
+	background-size: 1rem;
+	padding-right: 2.5rem;
+	cursor: pointer;
+}
+
+/* Titles - matching the strong red Swiss911 usage */
+.page-title {
+	@apply mt-4 pb-2 text-6xl md:text-7xl text-red-500 tracking-[0.04em] font-swiss911;
+	text-shadow: 0 2px 4px rgba(185, 28, 28, 0.3);
+}
+
+.page-sub-title {
+	@apply pb-1 text-base md:text-lg text-neutral-400 tracking-[0.01em] font-normal;
+}
+
+hr {
+	@apply bg-neutral-800 border-neutral-800 my-6;
+}
+
+.modal {
+	@apply fixed inset-0 bg-black/90 flex items-center justify-center z-50;
+}
+
+.modal-content {
+	@apply text-neutral-200 bg-zinc-700 rounded-sm p-6  mx-4;
+}
+
+
+.filter-tag {
+	@apply bg-red-600/10 border border-red-600/50 text-red-400 rounded-sm px-3 py-1 font-medium tracking-[0.075em] transition-colors duration-200;
+}
+
+/* Router-outlet inserts host element as sibling — make it fill the flex container */
+router-outlet + * {
+	flex: 1 1 0%;
+	display: flex;
+	flex-direction: column;
+}
+
+.main-article {
+	@apply flex flex-col flex-1 ;
+}
+
+.main-section {
+	@apply bg-neutral-800/50 border border-neutral-700/50 p-4 flex-1;
+}
+
+
+thead tr {
+  @apply bg-neutral-700;
+}
+
+
+th, td {
+	@apply border border-zinc-600 text-neutral-200;
+}
+
+tbody tr:hover {
+	/* Animation pour les lignes du tableau, sauf thead */
+	@apply bg-emerald-500;
+}
+
+
+.loading {
+  @apply border-emerald-500;
+}
+
+/* Beacon Tour Theming */
+beacon-overlay {
+  --beacon-bg: #18181b; /* zinc-900 / neutral-900 */
+  --beacon-text: #e5e5e5; /* neutral-200 */
+  --beacon-primary: #ef4444; /* red-500 */
+  --beacon-primary-hover: #f87171; /* red-400 */
+  --beacon-radius: 0.125rem; /* rounded-sm */
+  --beacon-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.25);
+  --beacon-width: 380px;
+  --beacon-z-index: 1000;
+}
+
+beacon-overlay .beacon-step-indicator {
+  @apply text-emerald-400 font-mono;
+}
+
+beacon-overlay .beacon-title {
+  @apply font-swiss911 tracking-wider text-red-500;
+}
+
+beacon-overlay .beacon-btn-next {
+  @apply font-bold px-4 py-1 text-sm rounded-sm tracking-[0.075em] text-white transition-colors duration-200 cursor-pointer bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700;
+}
+
+beacon-overlay .beacon-btn-prev {
+  @apply font-bold px-4 py-1 text-sm tracking-[0.075em] text-white transition-colors duration-200 cursor-pointer bg-zinc-700 hover:bg-zinc-600 active:bg-zinc-800;
+}
+
+.beacon-highlighted-target {
+  position: relative !important;
+  z-index: 1100 !important; /* Higher than beacon-overlay (1000) */
+  outline: 6px solid #10b981 !important; /* emerald-500 */
+  outline-offset: 4px !important;
+  box-shadow: 0 0 40px 15px rgba(16, 185, 129, 0.9) !important;
+  animation: beacon-highlight-pulse 1.5s ease-in-out infinite !important;
+  transition: all 0.3s ease !important;
+}
+
+@keyframes beacon-highlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 40px 15px rgba(16, 185, 129, 0.9) !important;
+    outline-color: rgba(16, 185, 129, 1) !important;
+  }
+  50% {
+    box-shadow: 0 0 60px 25px rgba(16, 185, 129, 0.6) !important;
+    outline-color: rgba(16, 185, 129, 0.5) !important;
+  }
+}

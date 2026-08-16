@@ -1,0 +1,182 @@
+<article class="main-article">
+  <h1 class="sr-only">{{ score?.title }} by {{ score?.author }} - Piano Score</h1>
+
+  <div class="px-4 sm:px-6 pt-4 min-h-[130px] md:min-h-[160px]">
+
+    @if (score?.author) {
+    <div class="page-title">{{ score!.title }}</div>
+    <h2 class="page-sub-title">{{ score!.author }}</h2>
+    }
+  </div>
+
+  <hr class="mx-4 sm:mx-6">
+
+  <!-- ── Toolbar ────────────────────────────────────────── -->
+  <div class="flex flex-wrap items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:justify-end">
+    @if (score) {
+    <button (click)="copyUrlToClipboard()" class="btn-primary inline-flex items-center gap-1.5" title="Copy link">
+      <ng-icon name="bootstrapClipboard" size="13"></ng-icon>
+      <span>Copy link</span>
+    </button>
+    }
+    <button (click)="onBack()" class="btn-secondary">← Browse</button>
+    @if (isOwner()) {
+    <button (click)="editScore()" class="btn-primary inline-flex items-center gap-1.5">
+      <ng-icon name="bootstrapPencil" size="13"></ng-icon>
+      <span>Edit</span>
+    </button>
+    }
+    @if (score?.has_files) {
+    <button
+      (click)="downloadFile('midi')"
+      [disabled]="!isOwnerOrPublic()"
+      [title]="!isOwnerOrPublic() ? 'Downloads restricted — copyrighted work' : 'Download MIDI'"
+      class="btn-primary download-btn"
+      [class.opacity-40]="!isOwnerOrPublic()"
+      [class.cursor-not-allowed]="!isOwnerOrPublic()">
+      <ng-icon name="bootstrapDownload" size="13"></ng-icon>
+      <span>MIDI</span>
+    </button>
+    <button
+      (click)="downloadFile('musicxml')"
+      [disabled]="!isOwnerOrPublic()"
+      [title]="!isOwnerOrPublic() ? 'Downloads restricted — copyrighted work' : 'Download MusicXML'"
+      class="btn-primary download-btn"
+      [class.opacity-40]="!isOwnerOrPublic()"
+      [class.cursor-not-allowed]="!isOwnerOrPublic()">
+      <ng-icon name="bootstrapDownload" size="13"></ng-icon>
+      <span>MusicXML</span>
+    </button>
+    <button
+      (click)="downloadFile('pdf')"
+      [disabled]="!isOwnerOrPublic()"
+      [title]="!isOwnerOrPublic() ? 'Downloads restricted — copyrighted work' : 'Download PDF'"
+      class="btn-primary download-btn"
+      [class.opacity-40]="!isOwnerOrPublic()"
+      [class.cursor-not-allowed]="!isOwnerOrPublic()">
+      <ng-icon name="bootstrapDownload" size="13"></ng-icon>
+      <span>PDF</span>
+    </button>
+    <button (click)="playScore()" class="btn-hero w-full sm:w-auto justify-center inline-flex items-center gap-1.5">
+      <span aria-hidden="true">🎹</span>
+      <span>Practice</span>
+    </button>
+    }
+  </div>
+
+  <div class="px-4 sm:px-6 pb-12 flex flex-col gap-5 mt-6">
+
+    <!-- ── Loading ────────────────────────────────────────── -->
+    @if (loading) {
+    <div class="flex items-center gap-3 py-10">
+      <div class="spinner w-4 h-4 text-neutral-500"></div>
+      <p class="text-sm text-neutral-400">Loading score…</p>
+    </div>
+    }
+
+    <!-- ── Error ──────────────────────────────────────────── -->
+    @if (error && !loading) {
+    <div class="alert-error">
+      <strong>Error:</strong> {{ error }}
+    </div>
+    }
+
+    @if (!loading && score) {
+
+    <!-- ── File processing status ────────────────────────── -->
+    @if (!score.has_files) {
+    <div class="exercise-desc-card">
+      <div class="exercise-desc-section">
+        <p class="exercise-desc-label">Processing status</p>
+
+        @if (loadingWorkload) {
+        <div class="flex items-center gap-2 mt-3">
+          <div class="spinner w-3 h-3 text-neutral-500"></div>
+          <span class="text-sm text-neutral-400">Loading status…</span>
+        </div>
+        }
+
+        @if (!loadingWorkload && workload) {
+        <div class="flex flex-col gap-2.5 mt-3">
+          <div class="flex items-center justify-between">
+            <span class="field-label">Status</span>
+            <span class="text-xs font-semibold uppercase tracking-widest" [ngClass]="{
+                    'text-yellow-400':  workload.status === 'PENDING',
+                    'text-blue-400':    workload.status === 'RUNNING',
+                    'text-emerald-400': workload.status === 'COMPLETED',
+                    'text-red-400':     workload.status === 'FAILED'
+                  }">{{ workload.status }}</span>
+          </div>
+          @if (workload.kind) {
+          <div class="flex items-center justify-between">
+            <span class="field-label">Type</span>
+            <span class="text-sm text-neutral-300">{{ workload.kind }}</span>
+          </div>
+          }
+          @if (workload.createdAt) {
+          <div class="flex items-center justify-between">
+            <span class="field-label">Created</span>
+            <span class="text-sm text-neutral-300">{{ workload.createdAt | date:'medium' }}</span>
+          </div>
+          }
+          @if (workload.duration) {
+          <div class="flex items-center justify-between">
+            <span class="field-label">Duration</span>
+            <span class="text-sm text-neutral-300">{{ workload.duration }}ms</span>
+          </div>
+          }
+          @if (workload.errorMessage) {
+          <div class="alert-error mt-3">{{ workload.errorMessage }}</div>
+          }
+        </div>
+        }
+
+        @if (!loadingWorkload && !workload) {
+        <p class="text-sm text-neutral-400 mt-3">No processing information available. Files may not have been submitted
+          yet.</p>
+        }
+      </div>
+    </div>
+    }
+
+    <!-- ── Metadata ───────────────────────────────────────── -->
+    <app-score-basic-info [score]="score"></app-score-basic-info>
+
+    <!-- ── Exercises in key ───────────────────────────────── -->
+    @if (score.fullKey) {
+    <app-exercises-in-key [fullKey]="score.fullKey!"></app-exercises-in-key>
+    }
+
+    <!-- ── Video lessons ──────────────────────────────────── -->
+    <section class="video-lessons-section">
+      @if (loadingVideos) {
+      <div class="flex items-center gap-3 py-2">
+        <div class="spinner w-4 h-4 text-neutral-500"></div>
+        <p class="text-sm text-neutral-400">Loading related videos…</p>
+      </div>
+      }
+
+      @if (videosError) {
+      <div class="alert-error">
+        <strong>Video API error:</strong> {{ videosError }}
+      </div>
+      }
+
+      @if (!loadingVideos && !videosError && videos.length > 0) {
+      <app-video-carousel [videos]="videos" (selectVideo)="openVideoPlayer($event)"></app-video-carousel>
+      }
+    </section>
+
+
+
+    }
+  </div>
+
+  <app-video-player-modal
+    [open]="isVideoPlayerOpen"
+    [video]="selectedVideo"
+    [scoreId]="score?.id || null"
+    (close)="closeVideoPlayer()">
+  </app-video-player-modal>
+
+</article>

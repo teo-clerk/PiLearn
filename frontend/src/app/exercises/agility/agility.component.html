@@ -1,0 +1,71 @@
+<div class="exercise-page">
+
+  <header>
+    <div class="page-title">Agility</div>
+    <div class="page-sub-title">Select a key, chord, and exercise to begin</div>
+  </header>
+
+  <hr>
+
+  <!-- ── Toolbar ─────────────────────────────────────── -->
+  <div class="flex items-center justify-between">
+    <p class="page-sub-title">{{ selectedKey }} · {{ selectedChord.name }} · {{ selectedExcercice.title }}</p>
+    <button (click)="load()" class="btn-hero">Start</button>
+  </div>
+
+  <div class="exercise-body">
+
+    <!-- ── Controls ──────────────────────────────────── -->
+    <div class="exercise-controls">
+
+      <div class="flex flex-col gap-1.5">
+        <label class="field-label" for="agility-key">Key</label>
+        <select id="agility-key" [(ngModel)]="selectedKey" (ngModelChange)="onKeyChange()" class="input-field">
+          @for (key of keys; track key) {
+            <option [ngValue]="key">{{ key }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="field-label" for="agility-chord">Chord</label>
+        <select id="agility-chord" [(ngModel)]="selectedChord" (ngModelChange)="onChordChange()" class="input-field">
+          @for (chord of availableChords; track chord) {
+            <option [ngValue]="chord">{{ selectedKey }} {{ chord.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="field-label" for="agility-exercise">Exercise</label>
+        <select id="agility-exercise" [(ngModel)]="selectedExcercice" (ngModelChange)="onSelectedExerciceChange()" class="input-field">
+          @for (exercise of myexcerices; track exercise) {
+            <option [ngValue]="exercise">{{ exercise.title }}</option>
+          }
+        </select>
+      </div>
+
+    </div>
+
+    <!-- ── Description ───────────────────────────────── -->
+    <div class="exercise-desc">
+      <div class="exercise-desc-card">
+
+        <div class="exercise-desc-section">
+          <p class="exercise-desc-label">Exercise — <span class="text-neutral-300">{{ selectedKey }} {{ selectedChord.name }} — {{ selectedExcercice.title }}</span></p>
+          <p class="exercise-desc-text">{{ selectedExcercice.advice || 'No description available.' }}</p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  @for (_ of [componentKey]; track _) {
+    <app-popular-scores-in-key
+      [fullKey]="fullKey"
+      [limit]="10">
+    </app-popular-scores-in-key>
+  }
+
+</div>

@@ -1,0 +1,27 @@
+meta {
+  name: score search
+  type: http
+  seq: 13
+}
+
+get {
+  url: http://localhost:8080/score/search?fullKey&description=NONE
+  body: none
+  auth: inherit
+}
+
+params:query {
+  fullKey: 
+  description: NONE
+  ~keyword: 
+  ~genreId: {{genreId}}
+  ~gradeStart: {{gradeStart}}
+  ~gradeEnd: {{gradeEnd}}
+  ~offset: {{offset}}
+  ~limit: {{limit}}
+}
+
+headers {
+  Accept: */*
+  Authorization: Bearer {{token}}
+}

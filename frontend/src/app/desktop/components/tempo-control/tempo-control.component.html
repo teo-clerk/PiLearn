@@ -1,0 +1,36 @@
+@if (isOpen) {
+
+<div class="modal" (click)="onBackdropClick($event)">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+
+
+      <h2 class="card-secondary-title">Tempo</h2>
+
+
+      <div class="flex items-center justify-center gap-2  p-2">
+        <button class="btn btn-desktop" (click)="decrease()">
+          <ng-icon name="bootstrapDash" class="svg-button" />
+        </button>
+        <input type="number" min="20" max="200" class="w-24 text-center input-field" [value]="tempo"
+          (input)="onNumberInput($any($event.target).value)" />
+        <button class="btn btn-desktop" (click)="increase()">
+          <ng-icon name="bootstrapPlus" classZZ="svg-button" />
+        </button>
+      </div>
+
+      <div class="p-3">
+        <input type="range" min="20" max="200" [value]="tempo" (input)="onRangeInput($any($event.target).value)"
+          class="w-full accent-emerald-500" />
+      </div>
+
+      <div class="flex items-center gap-2 p-3">
+        <input type="checkbox" id="metronome" [checked]="metronome" (change)="onMetronomeStatus($event.target.checked)" />
+        <label for="metronome">Metronome</label>
+      </div>
+
+    <div class="flex justify-end mt-4">
+      <button (click)="close()" class="btn-secondary">Close</button>
+    </div>
+  </div>
+</div>
+}

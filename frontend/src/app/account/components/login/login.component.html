@@ -1,0 +1,62 @@
+<article class="main-article">
+  <div class="page-title">Login</div>
+
+  <section class="main-section">
+    <div class="flex justify-center items-center h-full">
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="card-secondary w-full max-w-sm">
+        <h2 class="card-secondary-title text-center">Welcome Back</h2>
+
+        <!-- Error message -->
+        @if (errorMessage) {
+          <div class="alert-error mb-4" (click)="clearError()">
+            {{ errorMessage }}
+            <button type="button" class="float-right font-bold cursor-pointer">×</button>
+          </div>
+        }
+
+        <div class="mb-4">
+          <label for="email" class="block text-sm font-medium mb-2">email</label>
+          <input type="text" id="email" formControlName="email"
+            class="input-field w-full"
+            placeholder="Enter your email">
+          @if (loginForm.get('email')?.invalid && loginForm.get('email')?.touched) {
+            <div
+              class="text-error text-sm mt-1">
+              email is required.
+            </div>
+          }
+        </div>
+
+        <div class="mb-6">
+          <label for="password" class="block text-sm font-medium mb-2">Password</label>
+          <input type="password" id="password" formControlName="password"
+            class="input-field w-full"
+            placeholder="Enter your password">
+          @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
+            <div
+              class="text-error text-sm mt-1">
+              Password is required.
+            </div>
+          }
+        </div>
+
+        <button type="submit" [disabled]="loginForm.invalid || isLoading"
+          class="btn-primary w-full">
+          @if (!isLoading) {
+            <span>Login</span>
+          }
+          @if (isLoading) {
+            <span class="flex items-center justify-center">
+              <span class="spinner h-5 w-5 border-2 -ml-1 mr-3"></span>
+              Logging in...
+            </span>
+          }
+        </button>
+
+        <div class="text-center mt-4">
+          <a routerLink="/account/create" class="link-primary">Don't have an account? Create one</a>
+        </div>
+      </form>
+    </div>
+  </section>
+</article>

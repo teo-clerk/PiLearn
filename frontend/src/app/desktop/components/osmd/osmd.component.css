@@ -1,0 +1,113 @@
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e3e3e3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.error-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.error-content {
+  text-align: center;
+  max-width: 400px;
+  padding: 2rem;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+}
+
+.error-title {
+  color: #d32f2f;
+  margin: 0 0 1rem 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.error-message {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.retry-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.retry-button:hover {
+  background-color: #2980b9;
+}
+
+.no-score-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.no-score-text {
+  color: #999;
+  font-size: 16px;
+  margin: 0;
+}
+
+
+
+
+.osmd-container {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  
+  /* Masquer les barres de défilement */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE et Edge */
+}
+
+/* Masquer les barres de défilement pour Chrome, Safari et Opera */
+.osmd-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  
+  .error-content {
+    padding: 1rem;
+  }
+  
+}

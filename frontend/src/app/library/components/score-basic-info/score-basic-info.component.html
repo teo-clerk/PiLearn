@@ -1,0 +1,98 @@
+<div class="exercise-desc-card">
+  <div class="exercise-desc-section">
+    <p class="exercise-desc-label">Score information</p>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4 mt-3">
+
+      <div>
+        <p class="field-label">Genre</p>
+        @if (score.genre && score.genre_slug) {
+          <a [routerLink]="['/library/genres', score.genre_slug]" class="link-primary text-sm mt-0.5 block">{{ score.genre }}</a>
+        } @else {
+          <p class="text-sm text-neutral-300 mt-0.5">{{ score.genre || '—' }}</p>
+        }
+      </div>
+
+      <div>
+        <p class="field-label">Author</p>
+        @if (score.author_slug) {
+          <a [routerLink]="['/library/artists', score.author_slug]" class="link-primary text-sm mt-0.5 block">{{ score.author }}</a>
+        } @else {
+          <p class="text-sm text-neutral-300 mt-0.5">{{ score.author || '—' }}</p>
+        }
+      </div>
+
+      <div>
+        <p class="field-label">Key</p>
+        @if (score.fullKey && score.genre_slug) {
+          <a [routerLink]="['/library/genres', score.genre_slug]" [queryParams]="{fullKey: score.fullKey}" class="link-primary text-sm mt-0.5 block">{{ score.fullKey }}</a>
+        } @else {
+          <p class="text-sm text-neutral-300 mt-0.5">{{ score.fullKey || '—' }}</p>
+        }
+      </div>
+
+      <div>
+        <p class="field-label">Grade</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.grade || '—' }}</p>
+      </div>
+
+      <div>
+        <p class="field-label">Duration</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ formatDuration(score.duration) }}</p>
+      </div>
+
+      <div>
+        <p class="field-label">Tempo</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.tempo || '—' }}</p>
+      </div>
+
+      <div>
+        <p class="field-label">Tracks</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.tracks_count || '—' }}</p>
+      </div>
+
+      <div>
+        <p class="field-label">Measures</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.measures || '—' }}</p>
+      </div>
+
+      <div>
+        <p class="field-label">Public Domain</p>
+        @if (score.publicDomain) {
+          <span class="text-xs font-semibold uppercase tracking-widest text-emerald-400 mt-0.5 block">Yes</span>
+        } @else {
+          <span class="text-xs font-semibold uppercase tracking-widest text-red-400 mt-0.5 block">No</span>
+        }
+      </div>
+
+      @if (score.has_lyrics) {
+        <div>
+          <p class="field-label">Lyrics</p>
+          <p class="text-sm text-neutral-300 mt-0.5">Yes</p>
+        </div>
+      }
+
+      <div>
+        <p class="field-label">Uploaded</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.uploaded_at | date:'mediumDate' }}</p>
+      </div>
+
+      @if (score.author_mbid || score.mbid) {
+        <div>
+          <p class="field-label">MusicBrainz</p>
+          <div class="flex gap-3 mt-0.5">
+            @if (score.author_mbid) {
+              <a class="link-primary text-sm" href="https://musicbrainz.org/artist/{{ score.author_mbid }}" target="_blank" rel="noopener noreferrer">Artist</a>
+            }
+            @if (score.mbid) {
+              <a class="link-primary text-sm" href="https://musicbrainz.org/work/{{ score.mbid }}" target="_blank" rel="noopener noreferrer">Work</a>
+            }
+          </div>
+        </div>
+      }
+      <div>
+        <p class="field-label">Owner</p>
+        <p class="text-sm text-neutral-300 mt-0.5">{{ score.owner || '—' }}</p>
+      </div>
+    </div>
+  </div>
+</div>

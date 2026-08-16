@@ -1,0 +1,97 @@
+<article class="main-article">
+
+  <div class="px-4 sm:px-6 pt-4">
+    <h3 class="page-title">Import Music Work</h3>
+    <div class="page-sub-title">Please select a file to import</div>
+  </div>
+
+  <hr class="mx-4 sm:mx-6">
+
+  <hr>
+  <section class="main-section" aria-label="Score details and actions">
+    <div class="card-secondary">
+
+
+      @if (!loading) {
+        @if (hasFile) {
+        <form [formGroup]="checkboxGroup" class="m-2">
+          <div class="text-2xl">{{midi?.name || fileName}}</div>
+          <table class="table-auto border-collapse border border-gray-400 w-full">
+            <thead>
+              <tr>
+                <th class="border border-gray-300 px-4 py-2"></th>
+                <th class="border border-gray-300 px-4 py-2">Notes</th>
+                <th class="border border-gray-300 px-4 py-2">Instrument</th>
+                <th class="border border-gray-300 px-4 py-2">Track Name</th>
+                <th class="border border-gray-300 px-4 py-2">Study</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (checkbox of checkboxes; track checkbox; let i = $index) {
+              <tr formArrayName="checkboxes">
+                <td class="border border-gray-300 px-4 py-2">{{midi!.tracks[i].instrument.percussion ? "🥁" :
+                  "♩"}}</td>
+                <td class="border border-gray-300 px-4 py-2">{{midi!.tracks[i].notes.length}}</td>
+                <td class="border border-gray-300 px-4 py-2">{{midi!.tracks[i].instrument.name}}</td>
+                <td class="border border-gray-300 px-4 py-2">{{midi!.tracks[i].name || " ----------------- "}}
+                </td>
+                <td class="border border-gray-300 px-4 py-2">
+                  <input type="checkbox" [formControlName]="i" (change)="checkTrack(i)" />
+                </td>
+              </tr>
+              }
+            </tbody>
+          </table>
+          @if (studies.length ===1) {
+          <div>
+            <input class="m-4" type="checkbox" id="splitvoices" (change)="splitVoicesChecked()"
+              [checked]="splitVoices" />
+            <label for="splitvoices" class="text-2x1 italic p-2">split voices</label>
+          </div>
+          }
+        </form>
+        }
+        <div class="">
+          @if (!hasFile) {
+
+            <label for="dropzone-file" class="">
+              <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                <ng-icon name="bootstrapFloppy" class="svg-icon"></ng-icon>
+                <p class="mb-2"><span class="font-semibold">Click to
+                    upload</span> or drag and drop</p>
+                <p class="text-xs">.MID, .MIDI, .KAR, .PDF, .PNG, .JPEG,
+                  .MUSICXML, .MXL</p>
+              </div>
+              <input id="dropzone-file" type="file" class="hidden" #file type="file" (change)="onFileChange(file)"
+                accept=".mid, .midi, .kar, .pdf, .musicxml, .mxl, .png, .jpg, .jpeg" />
+            </label>
+          
+          }
+          <div>
+            <input class="m-4" type="checkbox" id="makefingering" (change)="makeFingeringChecked()"
+              [checked]="makeFingering" />
+            <label for="makefingering" class="text-2x1 italic p-2">Enable automatic fingering</label>
+          </div>
+          @if (hasFile) {
+          <button class="btn-primary m-4" (click)="load()">load</button>
+          }
+          @if (hasFile) {
+          <button class="btn-secondary m-4" (click)="reset()">reset</button>
+          }
+        </div>
+      
+      
+    }
+    </div>
+  </section>
+</article>
+
+@if (isModalOpen) {
+  <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="import-error-title">
+    <div class="modal-card">
+      <h3 id="import-error-title" class="modal-title">{{ modalTitle || 'Error' }}</h3>
+      <p class="modal-content">An error has occurred, the file cannot be read</p>
+      <button class="btn-secondary" (click)="closeModal()">Close</button>
+    </div>
+  </div>
+}

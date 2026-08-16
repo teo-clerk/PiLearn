@@ -1,0 +1,288 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: jules
+      changes:
+        - createTable:
+            schemaName: pianoml
+            tableName: "user"
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: false
+              - column:
+                  name: password
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: verified
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bio
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: image
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: url
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: locked
+                  type: BOOLEAN
+                  defaultValue: "false"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reset_password
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: roles
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+  - changeSet:
+      id: 2
+      author: jules
+      changes:
+        - createTable:
+            schemaName: pianoml
+            tableName: "genre"
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: mbid
+                  type: UUID
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: false
+  - changeSet:
+      id: 3
+      author: jules
+      changes:
+        - createTable:
+            schemaName: pianoml
+            tableName: "author"
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: mbid
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: false
+              - column:
+                  name: sort_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: disambiguation
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: country
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: type
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: gender
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: life_span_begin
+                  type: date
+                  constraints:
+                    nullable: true
+              - column:
+                  name: life_span_end
+                  type: date
+                  constraints:
+                    nullable: true
+              - column:
+                  name: life_span_ended
+                  type: BOOLEAN
+                  constraints:
+                    nullable: true
+  - changeSet:
+      id: 4
+      author: jules
+      changes:
+        - createTable:
+            schemaName: pianoml
+            tableName: "score"
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: author_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: genre_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: version
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: owner_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tracks_count
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: measures_count
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: hand_separated
+                  type: BOOLEAN
+                  constraints:
+                    nullable: true
+              - column:
+                  name: has_lyrics
+                  type: BOOLEAN
+                  constraints:
+                    nullable: true
+              - column:
+                  name: grade
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: uploaded_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: image
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: mbid
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: has_files
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: duration
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: study_tracks
+                  type: varchar(32) #(INTEGER[]) not supported by H2
+                  constraints:
+                    nullable: true
+              - column:
+                  name: publish
+                  type: BOOLEAN
+                  constraints:
+                    nullable: true
+              - column:
+                  name: immutable_slug
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: true
+              - column:
+                  name: mutable_slug
+                  type: VARCHAR(255)
+                  constraints:
+                    unique: true
+                    nullable: true
+              - column:
+                  name: etude
+                  type: BOOLEAN
+                  defaultValue: false
+
+        - addUniqueConstraint:
+            tableName: "score"
+            columnNames: mbid,owner_id,version
+            constraintName: uq_score_mbid_owner_version
+            schemaName: pianoml

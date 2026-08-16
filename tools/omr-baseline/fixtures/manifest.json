@@ -1,0 +1,165 @@
+{
+  "$comment": [
+    "OMR fixture corpus registry.",
+    "",
+    "The PDFs themselves are NOT committed (see root .gitignore) — they are private",
+    "local test fixtures. This manifest is the committed contract: it pins each file",
+    "by sha256 so a corpus that drifts is detected instead of silently changing the",
+    "baseline underneath us.",
+    "",
+    "corpusDir is the path INSIDE the OMR container. docker-compose mounts",
+    "./Scores there read-only.",
+    "",
+    "groundTruth is null until a human reads the printed score and fills it in",
+    "(task P1-T13). null means 'not yet verified', never 'verified as absent'.",
+    "Regression checking works without it; accuracy scoring does not."
+  ],
+
+  "schemaVersion": "1.0",
+  "corpusDir": "/home/appuser/fixtures",
+  "pipeline": "legacy/pdf2pack.sh",
+
+  "coverageGaps": [
+    "7 of 10 fixtures are single-page, so the relieur merge stage (P3) and the",
+    "silent partial-failure path are barely exercised. Add at least one 8+ page",
+    "score before trusting the merge numbers.",
+    "All fixtures are born-digital engraving. No scanned/photographed input, which",
+    "is the harder real-world case. Add one scan before Phase 2 concludes."
+  ],
+
+  "fixtures": [
+    {
+      "id": "chopin-prelude-e-minor",
+      "file": "Frédéric Chopin - Prelude in E Minor.pdf",
+      "sha256": "7e94009fe04576fd442f0bd05401e9f8f213adef04644893f2f781ab01d017d2",
+      "pages": 1,
+      "sizeBytes": 69026,
+      "title": "Prelude in E Minor",
+      "composer": "Frederic Chopin",
+      "makeFingering": false,
+      "notes": "Slow homophonic texture, dense LH chords. Baseline case for chord recognition.",
+      "groundTruth": null
+    },
+    {
+      "id": "debussy-clair-de-lune",
+      "file": "By CLAUDE DEBUSSY - CLAIR DE LUNE.pdf",
+      "sha256": "4747c363ef52514474be56dabaa29e21df4e1e6de37d3a3434c342a9324476b1",
+      "pages": 1,
+      "sizeBytes": 73710,
+      "title": "Clair de Lune",
+      "composer": "Claude Debussy",
+      "makeFingering": false,
+      "notes": "Cross-staff writing and triplets. Stresses hand assignment (P7).",
+      "groundTruth": null
+    },
+    {
+      "id": "tiersen-comptine",
+      "file": "By YANN TIERSEN - Comptine d’un autre été_ L’après-midi.pdf",
+      "sha256": "0f7cbc4059194e00bf84bf1f1f0f30e30bbb646472395dd6dd8174828149eea8",
+      "pages": 1,
+      "sizeBytes": 108633,
+      "title": "Comptine d'un autre ete: L'apres-midi",
+      "composer": "Yann Tiersen",
+      "makeFingering": false,
+      "notes": "Ostinato LH, repeated structure. Good repeat/volta case. Non-ASCII filename.",
+      "groundTruth": null
+    },
+    {
+      "id": "tiersen-la-dispute",
+      "file": "Yann Tiersen - La Dispute.pdf",
+      "sha256": "7cbfa2b0fd923a636b28bca4ee95390d30686dc83c0027fc3fb1d5779df74a36",
+      "pages": 1,
+      "sizeBytes": 72045,
+      "title": "La Dispute",
+      "composer": "Yann Tiersen",
+      "makeFingering": false,
+      "notes": "Sparse texture. Low-density control case.",
+      "groundTruth": null
+    },
+    {
+      "id": "hisaishi-howls-merry-go-round",
+      "file": "Composed by Joe Hisaishi - Howl’s Moving Castle_(The Merry-Go-Round Of Life).pdf",
+      "sha256": "c34d868c3d9ef65dae09185613fe8c5e1fad19b7e172e4b718b208109cfa2423",
+      "pages": 1,
+      "sizeBytes": 91477,
+      "title": "Howl's Moving Castle (The Merry-Go-Round of Life)",
+      "composer": "Joe Hisaishi",
+      "makeFingering": false,
+      "notes": "3/4 waltz, wide LH leaps. Tests span and leap features.",
+      "groundTruth": null
+    },
+    {
+      "id": "hisaishi-howls-piano-seeds",
+      "file": "Joe Hisaishi_Arr. by Piano Seeds STUDIO - Howl's Moving Castle.pdf",
+      "sha256": "59c1d2fa0b9f1e1dcb954d439b32b10ab35bba01506eea01ff75d66e360d2013",
+      "pages": 3,
+      "sizeBytes": 198334,
+      "title": "Howl's Moving Castle",
+      "composer": "Joe Hisaishi",
+      "makeFingering": false,
+      "notes": "3 pages — exercises the relieur merge and page-seam continuity. Pairs with the fixture above for arrangement-vs-arrangement comparison.",
+      "groundTruth": null
+    },
+    {
+      "id": "zimmer-interstellar",
+      "file": "Hans Zimmer - Interstellar Theme.pdf",
+      "sha256": "71891dc201f7af505fc21b2e31bab7ee65e4f0d9e6aa21638a5b83d14af533f2",
+      "pages": 2,
+      "sizeBytes": 97806,
+      "title": "Interstellar Theme",
+      "composer": "Hans Zimmer",
+      "makeFingering": false,
+      "notes": "2 pages, arpeggiated ostinato, long sustains. Multi-page merge case.",
+      "groundTruth": null
+    },
+    {
+      "id": "zimmer-cornfield-chase",
+      "file": "By HANS ZIMMER, _RYAN RUBIN and ALEX BIBSON - CORNFIELD CHASE.pdf",
+      "sha256": "be81de0a4876a4bb752730958f13f892ba831e3c368e4f81c07a2763eaa08dc4",
+      "pages": 1,
+      "sizeBytes": 78244,
+      "title": "Cornfield Chase",
+      "composer": "Hans Zimmer",
+      "makeFingering": false,
+      "notes": "Filename contains a leading comma-underscore artefact; useful shell-quoting canary.",
+      "groundTruth": null
+    },
+    {
+      "id": "hurwitz-mia-and-sebastian",
+      "file": "Music by Justin Hurwitz - MIA & SEBASTIAN’S THEME.pdf",
+      "sha256": "2ed5273b90ee555ab754f7558443cc6516dafc29000b579fe748fb91d79de12b",
+      "pages": 1,
+      "sizeBytes": 76046,
+      "title": "Mia & Sebastian's Theme",
+      "composer": "Justin Hurwitz",
+      "makeFingering": false,
+      "notes": "Ampersand and curly apostrophe in the filename and title — metadata escaping canary.",
+      "groundTruth": null
+    },
+    {
+      "id": "watson-je-te-laisserai-des-mots",
+      "file": "Patrick Watson - Je Te Laisserai Des Mots.pdf",
+      "sha256": "4c1db1c96c12453ca47f413a327d004079b4b1ce66ef39ea5bbada938e50e531",
+      "pages": 2,
+      "sizeBytes": 214447,
+      "title": "Je Te Laisserai Des Mots",
+      "composer": "Patrick Watson",
+      "makeFingering": false,
+      "notes": "2 pages, largest file. Likely carries lyrics — exercises the lyric path.",
+      "groundTruth": null
+    }
+  ],
+
+  "groundTruthTemplate": {
+    "$comment": "Copy into a fixture's groundTruth and fill in by reading the printed PDF.",
+    "measureCount": 0,
+    "staffCount": 2,
+    "keySignature": "0",
+    "$keySignatureFormat": "sharp count as a signed integer string: -2 = Bb major/G minor, 0 = C major/A minor, 1 = G major/E minor",
+    "timeSignature": "4/4",
+    "hasLyrics": false,
+    "hasRepeats": false,
+    "verifiedBy": "",
+    "verifiedAt": ""
+  }
+}
