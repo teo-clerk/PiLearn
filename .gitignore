@@ -1,0 +1,143 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PiLearn — root .gitignore
+# Sub-projects keep their own .gitignore for tool-specific noise.
+# Anything secret, generated, heavy, or machine-local belongs here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Secrets & local environment ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.local
+secrets/
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+gcp-service-account.json
+**/gcp-service-account.json
+application-root.properties
+application-secret*.properties
+**/application-*-local.properties
+
+# ── Local score fixtures (private test corpus, large binaries) ───────────────
+# Registered by checksum in tools/omr-baseline/fixtures/manifest.json.
+# Fetch locally; never commit the binaries.
+Scores/
+fixtures/pdf/
+fixtures/audio/
+
+# ── Node / Angular ───────────────────────────────────────────────────────────
+node_modules/
+dist/
+tmp/
+out-tsc/
+bazel-out/
+.angular/
+.nx/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+deno.lock
+
+# Generated frontend artefacts (produced by prebuild scripts)
+frontend/src/app/core/api/
+frontend/src/assets/version.json
+frontend/src/assets/shader/manifest.json
+frontend/public/sitemap.xml
+frontend/src/sitemap.xml
+
+# ── Java / Maven / Gradle ────────────────────────────────────────────────────
+target/
+build/
+!src/**/build/
+.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+!maven-wrapper.jar
+!gradle-wrapper.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+.gradle/
+gradle-app.setting
+
+# ── Python (OMR worker, analysis, harness) ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+shared-venv/
+.conda/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+poetry.lock
+!worker/poetry.lock
+
+# ── Vendored OMR tooling (cloned at image build, pinned by SHA) ──────────────
+homr/
+relieur/
+pianoplayer/
+autoharmonizer/
+piano-syllabus-classifier/
+
+# ── Docker & local infrastructure state ──────────────────────────────────────
+.docker/
+docker-compose.override.yml
+volumes/
+pgdata/
+minio-data/
+
+# ── OMR baseline harness output (reports are per-run; goldens ARE committed) ─
+tools/omr-baseline/reports/
+tools/omr-baseline/work/
+tools/omr-baseline/.cache/
+!tools/omr-baseline/golden/
+
+# ── Test & coverage output ───────────────────────────────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+**/target/site/jacoco/
+
+# ── Editors & OS ─────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.recommended.json
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Scratch ──────────────────────────────────────────────────────────────────
+notes.md
+NOTES.md
+scratch/
+*.log
+!docs/**/*.md
