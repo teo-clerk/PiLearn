@@ -1,0 +1,118 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-create-score-document
+      author: pilearn
+      comment: >
+        Canonical ScoreDocument storage (Phase 2). One row per (score_id, revision);
+        revisions are immutable so an in-flight learner's plan keeps resolving against
+        the document it was built from.
+      changes:
+        - createTable:
+            tableName: score_document
+            schemaName: pianoml
+            columns:
+              - column: { name: id, type: uuid, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: score_id, type: uuid, constraints: { nullable: false } }
+              - column: { name: revision, type: int, constraints: { nullable: false } }
+              - column: { name: schema_version, type: varchar(16), constraints: { nullable: false } }
+              - column: { name: analysis_version, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: document, type: jsonb, constraints: { nullable: false } }
+              - column: { name: alignment_index, type: jsonb }
+              - column: { name: confidence, type: jsonb }
+              - column: { name: document_confidence, type: double precision }
+              - column: { name: review_status, type: varchar(32) }
+              - column: { name: measure_count, type: int }
+              - column: { name: global_grade, type: double precision }
+              - column: { name: source_pages, type: int }
+              - column: { name: recognised_pages, type: int }
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+
+        - addUniqueConstraint:
+            tableName: score_document
+            schemaName: pianoml
+            columnNames: score_id, revision
+            constraintName: uq_score_document_score_revision
+
+        - addForeignKeyConstraint:
+            baseTableName: score_document
+            baseTableSchemaName: pianoml
+            baseColumnNames: score_id
+            referencedTableName: score
+            referencedTableSchemaName: pianoml
+            referencedColumnNames: id
+            constraintName: fk_score_document_score
+            onDelete: CASCADE
+
+        - createIndex:
+            tableName: score_document
+            schemaName: pianoml
+            indexName: idx_score_document_latest
+            columns:
+              - column: { name: score_id }
+              - column: { name: revision, descending: true }
+
+        # Partial index: the review queue is a small slice of a large table.
+        - sql:
+            comment: Index only documents that still need a human to look at them.
+            sql: >
+              CREATE INDEX idx_score_document_review
+              ON pianoml.score_document (created_at DESC)
+              WHERE review_status <> 'OK';
+            rollback: DROP INDEX IF EXISTS pianoml.idx_score_document_review;
+
+      rollback:
+        - dropTable: { tableName: score_document, schemaName: pianoml }
+
+  - changeSet:
+      id: 021-score-processing-columns
+      author: pilearn
+      comment: >
+        Processing state on the score itself, so the library can filter and display
+        without joining score_document.
+      changes:
+        - addColumn:
+            tableName: score
+            schemaName: pianoml
+            columns:
+              - column:
+                  name: current_revision
+                  type: int
+                  remarks: Latest score_document revision, null until first ingestion.
+              - column:
+                  name: processing_status
+                  type: varchar(32)
+                  defaultValue: NONE
+                  remarks: NONE | QUEUED | RUNNING | COMPLETED | REVIEW_REQUIRED | FAILED
+              - column:
+                  name: document_confidence
+                  type: double precision
+              - column:
+                  name: omr_job_id
+                  type: varchar(64)
+              - column:
+                  name: rights
+                  type: varchar(32)
+                  defaultValue: USER_UPLOAD_PRIVATE
+                  remarks: PUBLIC_DOMAIN | LICENSED | USER_UPLOAD_PRIVATE
+
+        - createIndex:
+            tableName: score
+            schemaName: pianoml
+            indexName: idx_score_processing_status
+            columns:
+              - column: { name: processing_status }
+
+      rollback:
+        - dropColumn:
+            tableName: score
+            schemaName: pianoml
+            columns:
+              - column: { name: current_revision }
+              - column: { name: processing_status }
+              - column: { name: document_confidence }
+              - column: { name: omr_job_id }
+              - column: { name: rights }

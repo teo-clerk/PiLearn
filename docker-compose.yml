@@ -63,7 +63,71 @@ services:
       echo 'bucket ready: ${STORAGE_BUCKET:-pilearn-media}'
       "
 
-  # ── OMR toolchain ──────────────────────────────────────────────────────────
+  # Shared job state for the worker. Without it the worker falls back to an
+  # in-process store, which is correct for one replica and wrong for two.
+  redis:
+    image: redis:7-alpine
+    container_name: pilearn-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── FastAPI OMR worker ─────────────────────────────────────────────────────
+  # Heavy image (~6 GB, 20-40 min first build). Only needed when working on
+  # ingestion; everyday frontend/backend work does not require it.
+  worker:
+    profiles: ["omr", "full"]
+    build:
+      context: .                      # repo root: the image needs backend/scripts too
+      dockerfile: worker/Dockerfile
+    image: pilearn/omr-worker:local
+    container_name: pilearn-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-pilearn-media}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:?STORAGE_ACCESS_KEY must be set in .env}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?STORAGE_SECRET_KEY must be set in .env}
+      STORAGE_PATH_STYLE_ACCESS: "true"
+      OMR_MAX_CONCURRENCY: ${OMR_MAX_CONCURRENCY:-2}
+      OMR_CONFIDENCE_THRESHOLD: ${OMR_CONFIDENCE_THRESHOLD:-0.60}
+      JOB_TIMEOUT_SEC: ${JOB_TIMEOUT_SEC:-3600}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - worker-work:/home/appuser/work
+      # Source mount for fast iteration; remove for a production-like run.
+      - ./worker/pilearn_worker:/home/appuser/worker/pilearn_worker:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=4).status_code==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          # homr holds a torch model in memory and MuseScore spawns an offscreen Qt
+          # process. Below ~4 GB the container OOMs mid-recognition.
+          memory: 6G
+
+  # ── OMR toolchain (legacy, harness only) ───────────────────────────────────
   # homr + relieur + MuseScore3 + pianoplayer + music21 + CPU torch.
   # Heavy: ~6 GB image, 20-40 min first build. Only needed when working on
   # ingestion or running the OMR baseline harness.
@@ -90,3 +154,5 @@ volumes:
   pgdata:
   minio-data:
   omr-work:
+  redis-data:
+  worker-work:
