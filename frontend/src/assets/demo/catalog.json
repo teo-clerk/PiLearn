@@ -1,0 +1,46 @@
+[
+  {
+    "slug": "demo",
+    "title": "Untitled",
+    "composer": "PiLearn",
+    "measures": 16,
+    "chunks": 4,
+    "grade": 2.5,
+    "tempoBpm": 88.0,
+    "keySignature": "C major",
+    "estimatedMinutes": 48
+  },
+  {
+    "slug": "bach-prelude-c",
+    "title": "Untitled",
+    "composer": "J. S. Bach",
+    "measures": 8,
+    "chunks": 2,
+    "grade": 3.2,
+    "tempoBpm": 72.0,
+    "keySignature": "C major",
+    "estimatedMinutes": 24
+  },
+  {
+    "slug": "fur-elise",
+    "title": "Untitled",
+    "composer": "L. van Beethoven",
+    "measures": 9,
+    "chunks": 4,
+    "grade": 2.9,
+    "tempoBpm": 60.0,
+    "keySignature": "C major",
+    "estimatedMinutes": 48
+  },
+  {
+    "slug": "gymnopedie-1",
+    "title": "Untitled",
+    "composer": "Erik Satie",
+    "measures": 8,
+    "chunks": 2,
+    "grade": 3.0,
+    "tempoBpm": 66.0,
+    "keySignature": "D major",
+    "estimatedMinutes": 24
+  }
+]

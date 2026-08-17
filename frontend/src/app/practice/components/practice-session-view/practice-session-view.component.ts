@@ -31,6 +31,7 @@ import {
   InputSourceSelectorComponent,
 } from '../input-source-selector/input-source-selector.component';
 import { type HudNote, NoteHudComponent } from '../note-hud/note-hud.component';
+import { PracticeTourComponent } from '../practice-tour/practice-tour.component';
 import { StageGuideComponent } from '../stage-guide/stage-guide.component';
 import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.component';
 
@@ -55,6 +56,7 @@ import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.c
     InputSourceSelectorComponent,
     StageGuideComponent,
     NoteHudComponent,
+    PracticeTourComponent,
   ],
   templateUrl: './practice-session-view.component.html',
   styleUrl: './practice-session-view.component.css',
@@ -78,6 +80,9 @@ export class PracticeSessionViewComponent {
   readonly isBootstrapping = signal(true);
   readonly bootstrapError = signal<string | null>(null);
   readonly showSummary = signal(false);
+
+  /** First-run tour. Suppressed during SSR and for anyone who has already seen it. */
+  readonly showTour = signal(!PracticeTourComponent.hasCompleted(inject(PLATFORM_ID)));
   readonly beatPulse = this.audio.beatPulse;
 
   readonly document = this.scoreService.document;
@@ -317,6 +322,16 @@ export class PracticeSessionViewComponent {
 
   shiftOctave(delta: number): void {
     this.qwerty.shiftOctave(delta);
+  }
+
+  onTourCompleted(): void {
+    this.showTour.set(false);
+  }
+
+  /** Re-run the tour from the header's Help button. */
+  restartTour(): void {
+    PracticeTourComponent.reset(this.platformId);
+    this.showTour.set(true);
   }
 
   dismissStageGuide(phase: string): void {

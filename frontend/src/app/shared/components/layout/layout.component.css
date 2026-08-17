@@ -1,129 +1,130 @@
-@reference "tailwindcss";
-
-/* ── HEADER ─────────────────────────────────────────────────────── */
-
-.site-header {
-  @apply sticky top-0 z-20 bg-black backdrop-blur-sm border-b border-neutral-800;
+/* Plain CSS with tokens. The previous stylesheet leaned on @apply throughout, which
+   expanded to 16 kB of generated utilities inside a component-scoped sheet — four times
+   its budget. Tokens cost nothing and are readable. */
+:host {
+  display: block;
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --border: #252a32;
+  --text: #edeff2;
+  --muted: #98a0ac;
+  --accent: #6366f1;
+  --ok: #22c55e;
 }
 
-.header-inner {
-  @apply flex items-center justify-between px-4 sm:px-6 h-14;
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* Breadcrumb */
-.breadcrumb-nav {
-  @apply flex items-center gap-0.5 min-w-0 overflow-hidden;
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
 }
 
-.brand-mark {
-  @apply flex items-center gap-2 text-neutral-200 font-bold text-xs uppercase
-         tracking-widest no-underline hover:text-white transition-colors shrink-0;
+.header__inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 0.7rem clamp(0.85rem, 3vw, 1.75rem);
 }
 
-.brand-dot {
-  @apply inline-block w-2.5 h-2.5 rounded-full bg-[#FFDD00] shrink-0;
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
+.brand__mark {
+  width: 9px; height: 9px; border-radius: 2px;
+  background: linear-gradient(135deg, #22d3ee, var(--accent));
+}
+.brand__name { font-size: 0.98rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+
+.nav { display: flex; gap: 0.15rem; flex: 1; }
+.nav__link {
+  padding: 0.4rem 0.7rem;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 120ms, background 120ms;
+}
+.nav__link:hover { color: var(--text); background: var(--surface); }
+.nav__link--active { color: var(--text); background: var(--surface); }
+.nav__link--account { font-weight: 600; }
+
+.header__actions { display: flex; align-items: center; gap: 0.6rem; }
+
+/* MIDI status */
+.midi {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.midi__dot { width: 6px; height: 6px; border-radius: 50%; background: #4b5563; }
+.midi--on { color: var(--text); border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.midi--on .midi__dot { background: var(--ok); box-shadow: 0 0 0 3px rgb(34 197 94 / 18%); }
+.midi--unsupported { opacity: 0.6; }
+
+.btn {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn--login { background: var(--accent); color: #fff; }
+.btn--login:hover { background: #4f46e5; }
+
+/* Breadcrumbs */
+.crumbs {
+  display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 0 clamp(0.85rem, 3vw, 1.75rem) 0.5rem;
+  font-size: 0.72rem;
+}
+.crumbs__link { color: var(--muted); text-decoration: none; }
+.crumbs__link:hover { color: var(--text); }
+.crumbs__sep { color: #3a404a; }
+.crumbs__current { color: var(--text); }
+
+/* ── Content ────────────────────────────────────────────────────────────── */
+.content { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.footer { border-top: 1px solid var(--border); background: var(--bg); }
+.footer__inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 0.85rem clamp(0.85rem, 3vw, 1.75rem);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.footer__brand { font-weight: 600; color: var(--text); }
+.footer__links { display: flex; gap: 0.9rem; }
+.footer__link { color: var(--muted); text-decoration: none; }
+.footer__link:hover { color: var(--text); }
+.footer__version { font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 780px) {
+  .header__inner { flex-wrap: wrap; gap: 0.6rem; }
+  .nav { order: 3; width: 100%; overflow-x: auto; }
+  .midi__text { display: none; }
 }
 
-.crumb-sep {
-  @apply text-neutral-700 mx-1.5 text-xs select-none;
-}
-
-.crumb-link {
-  @apply text-neutral-400 text-xs uppercase tracking-wider font-medium
-         no-underline hover:text-neutral-200 transition-colors
-         truncate max-w-[100px] sm:max-w-[180px] md:max-w-xs;
-}
-
-.crumb-current {
-  @apply text-red-400 hover:text-red-400 cursor-default;
-}
-
-/* Actions */
-.header-actions {
-  @apply flex items-center gap-2 sm:gap-3 shrink-0 ml-4;
-  min-width: 9rem;
-}
-
-.support-btn {
-  @apply flex items-center gap-1.5 text-xs font-medium text-neutral-400
-         hover:text-neutral-200 border border-neutral-700 hover:border-neutral-600
-         rounded-sm px-3 py-1.5 no-underline transition-all duration-200
-         focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500;
-}
-
-.login-btn {
-  @apply text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300
-         no-underline border border-red-500/30 hover:border-red-400/60
-         rounded-sm px-3 py-1.5 transition-all duration-200
-         focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500;
-}
-
-.user-link {
-  @apply text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300
-         no-underline underline underline-offset-4 decoration-red-500/40
-         hover:decoration-red-400/80 transition-all;
-}
-
-/* ── FOOTER ─────────────────────────────────────────────────────── */
-
-.site-footer {
-  @apply bg-black border-t border-neutral-800/80 z-20 relative;
-}
-
-.footer-inner {
-  @apply flex flex-col sm:flex-row items-center justify-between
-         px-4 sm:px-6 py-4 gap-3 sm:gap-0 max-w-screen-2xl mx-auto;
-}
-
-.footer-brand {
-  @apply flex items-center gap-2.5;
-}
-
-.footer-logo {
-  @apply flex items-center gap-2 text-neutral-400 font-bold text-xs uppercase tracking-widest;
-}
-
-.footer-version {
-  @apply font-mono text-xs text-neutral-400 hover:text-neutral-200
-         no-underline transition-colors;
-}
-
-.footer-links {
-  @apply flex items-center gap-2;
-}
-
-.footer-link {
-  @apply text-neutral-400 hover:text-neutral-200 no-underline text-xs
-         transition-colors focus-visible:outline-none focus-visible:text-neutral-200;
-}
-
-.footer-sep {
-  @apply text-neutral-800 text-xs select-none;
-}
-
-.footer-meta {
-  @apply flex items-center gap-3;
-}
-
-.footer-icon-link {
-  @apply text-neutral-400 hover:text-neutral-200 no-underline transition-colors text-sm
-         focus-visible:outline-none focus-visible:text-neutral-200;
-}
-
-.footer-copy {
-  @apply text-neutral-400 text-xs;
-}
-
-/* ── DONATION ICON ──────────────────────────────────────────────── */
-
-.donation-icon {
-  display: inline-block;
-  transition: transform 160ms ease, opacity 160ms ease;
-  transform: translateY(0) scale(1);
-  opacity: 0.9;
-}
-
-.donation-icon-bump {
-  transform: translateY(-2px) scale(1.15) rotate(-6deg);
-  opacity: 1;
-}
+@media (prefers-reduced-motion: reduce) { .nav__link { transition: none; } }

@@ -1,0 +1,59 @@
+<section class="hero">
+  <div class="hero__glow" aria-hidden="true"></div>
+
+  <div class="hero__content">
+    <p class="hero__eyebrow">Sheet music → practice plan</p>
+
+    <h1 class="hero__title">
+      Learn any piano piece<br />
+      <span class="hero__title-accent">step by step</span>, from raw sheet music
+    </h1>
+
+    <p class="hero__lede">
+      Upload a PDF. PiLearn reads the notation, works out where the hard bars are, and
+      builds you a plan — hands separate, phrase-sized chunks, tempo climbing as you
+      get it clean.
+    </p>
+
+    <ul class="pills" aria-label="What PiLearn does">
+      @for (pill of pills(); track pill.label) {
+        <li class="pill">
+          <span class="pill__icon" aria-hidden="true">{{ pill.icon }}</span>
+          {{ pill.label }}
+        </li>
+      }
+    </ul>
+
+    <div class="hero__actions">
+      <a class="btn btn--primary" routerLink="/practice/demo">
+        Try the interactive demo
+        <span class="btn__hint">no sign-up, no upload</span>
+      </a>
+
+      <!-- Drop target sits in the hero so the second action needs no navigation -->
+      <label
+        class="dropzone"
+        [class.dropzone--active]="isDragging()"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDrop($event)"
+      >
+        <input
+          type="file"
+          class="dropzone__input"
+          accept=".pdf,.musicxml,.xml,.mxl,.mid,.midi"
+          (change)="onFileInput($event)"
+        />
+        <span class="dropzone__icon" aria-hidden="true">⇪</span>
+        <span class="dropzone__text">
+          <strong>Upload sheet music</strong>
+          <span class="dropzone__hint">Drop a PDF here, or click to browse</span>
+        </span>
+      </label>
+    </div>
+
+    @if (error(); as message) {
+      <p class="hero__error" role="alert">{{ message }}</p>
+    }
+  </div>
+</section>

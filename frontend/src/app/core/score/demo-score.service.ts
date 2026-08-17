@@ -4,11 +4,26 @@ import { type Observable, forkJoin, map, shareReplay } from 'rxjs';
 import type { PracticeBundle } from './score-document.service';
 import type { Roadmap, RoadmapChunk, RoadmapStage, ScoreDocument } from './score-document.model';
 
-/** The route segment that triggers demo mode: `/practice/demo`. */
+/** Default demo when the route is just `/practice/demo`. */
 export const DEMO_SCORE_ID = 'demo';
 
-const DEMO_DOCUMENT_URL = 'assets/demo/demo-document.json';
-const DEMO_MUSICXML_URL = 'assets/demo/demo-score.musicxml';
+/** Every id served from assets rather than the API. */
+const DEMO_SLUGS = ['demo', 'bach-prelude-c', 'fur-elise', 'gymnopedie-1'] as const;
+export type DemoSlug = (typeof DEMO_SLUGS)[number];
+
+/** A demo piece as advertised on the landing page. */
+export interface DemoCatalogEntry {
+  slug: DemoSlug;
+  title: string;
+  composer: string;
+  measures: number;
+  chunks: number;
+  /** 0..8, from the difficulty analyser. */
+  grade: number;
+  tempoBpm: number;
+  keySignature: string;
+  estimatedMinutes: number;
+}
 
 /**
  * Serves a prebuilt score so the practice surface can be exercised with no backend,
@@ -27,31 +42,46 @@ const DEMO_MUSICXML_URL = 'assets/demo/demo-score.musicxml';
 @Injectable({ providedIn: 'root' })
 export class DemoScoreService {
   private readonly http = inject(HttpClient);
-  private cached?: Observable<PracticeBundle>;
+  private readonly cache = new Map<DemoSlug, Observable<PracticeBundle>>();
+  private catalogCache?: Observable<DemoCatalogEntry[]>;
 
   static isDemo(scoreId: string | null | undefined): boolean {
-    return scoreId === DEMO_SCORE_ID;
+    return DEMO_SLUGS.includes(scoreId as DemoSlug);
   }
 
-  load(): Observable<PracticeBundle> {
-    this.cached ??= forkJoin({
-      document: this.http.get<ScoreDocument>(DEMO_DOCUMENT_URL),
-      musicXml: this.http.get(DEMO_MUSICXML_URL, { responseType: 'text' }),
+  /** The demo shelf shown on the landing page. */
+  catalog(): Observable<DemoCatalogEntry[]> {
+    this.catalogCache ??= this.http
+      .get<DemoCatalogEntry[]>('assets/demo/catalog.json')
+      .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+    return this.catalogCache;
+  }
+
+  load(slug: string = DEMO_SCORE_ID): Observable<PracticeBundle> {
+    const key = (DEMO_SLUGS.includes(slug as DemoSlug) ? slug : DEMO_SCORE_ID) as DemoSlug;
+
+    const existing = this.cache.get(key);
+    if (existing) return existing;
+
+    const bundle = forkJoin({
+      document: this.http.get<ScoreDocument>(`assets/demo/${key}.document.json`),
+      musicXml: this.http.get(`assets/demo/${key}.musicxml`, { responseType: 'text' }),
     }).pipe(
       map(({ document, musicXml }) => ({
         document,
         index: document.alignment,
         musicXml,
-        roadmap: this.buildRoadmap(document),
+        roadmap: this.buildRoadmap(document, key),
       })),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
 
-    return this.cached;
+    this.cache.set(key, bundle);
+    return bundle;
   }
 
   /** Mirrors the stage ladder in `RoadmapService` (PRODUCT_SPEC §5.2). */
-  private buildRoadmap(document: ScoreDocument): Roadmap {
+  private buildRoadmap(document: ScoreDocument, slug: string): Roadmap {
     const targetTempo = document.meta.target_tempo_bpm;
     const chunks: RoadmapChunk[] = document.chunks.map((chunk) => {
       const startPct = Math.min(0.85, Math.max(0.45, 1 - 0.06 * chunk.difficulty));
@@ -117,7 +147,7 @@ export class DemoScoreService {
     );
 
     return {
-      scoreId: DEMO_SCORE_ID,
+      scoreId: slug,
       revision: document.revision,
       title: document.meta.title,
       composer: document.meta.composer,

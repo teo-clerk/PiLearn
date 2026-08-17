@@ -1,97 +1,91 @@
-<div class="flex flex-col min-h-screen" id="top">
+<div class="shell" id="top">
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="header" role="banner">
+    <div class="header__inner">
+      <a routerLink="/" class="brand" title="PiLearn home">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span class="brand__name">PiLearn</span>
+      </a>
 
-  <!-- ─── HEADER ───────────────────────────────────────────────── -->
-  <header class="site-header" role="banner">
-    <div class="header-inner">
-
-      <nav class="breadcrumb-nav" aria-label="Breadcrumb navigation">
-        <a routerLink="/home" class="brand-mark" title="Return to PianoML home page">
-          <span class="brand-dot" aria-hidden="true"></span>
-          PianoML
+      <nav class="nav" aria-label="Main">
+        <a routerLink="/library" routerLinkActive="nav__link--active" class="nav__link">
+          Explore scores
         </a>
-
-        @for (item of breadcrumbService.items$ | async; track item.path; let last = $last) {
-          <span class="crumb-sep" aria-hidden="true">/</span>
-          @if (!last) {
-            <a [routerLink]="item.path" class="crumb-link" [title]="'Navigate to ' + item.label">
-              {{ item.label }}
-            </a>
-          } @else {
-            <span class="crumb-link crumb-current" aria-current="page">{{ item.label }}</span>
-          }
-        }
+        <a routerLink="/import" routerLinkActive="nav__link--active" class="nav__link">
+          Upload PDF
+        </a>
+        <a routerLink="/practice/demo" routerLinkActive="nav__link--active" class="nav__link">
+          Practice sandbox
+        </a>
       </nav>
 
-      <div class="header-actions">
-        <a class="support-btn"
-           href="https://www.buymeacoffee.com/emmanuelflg"
-           target="_blank" rel="noopener noreferrer"
-           title="Support PianoML">
-          <span class="hidden sm:inline">Buy me a</span>
-          <span aria-hidden="true" class="donation-icon" [class.donation-icon-bump]="donationTick">{{ donationIcon }}</span>
-        </a>
+      <div class="header__actions">
+        <!-- MIDI status. Reports the real capability, not a guess: browsers without
+             WebMIDI say so rather than sitting permanently on "not connected". -->
+        <span
+          class="midi"
+          [class.midi--on]="midiConnected()"
+          [class.midi--unsupported]="!midiSupported()"
+          [title]="midiTitle()"
+        >
+          <span class="midi__dot" aria-hidden="true"></span>
+          <span class="midi__text">{{ midiLabel() }}</span>
+        </span>
 
         @if ((isLoggedIn$ | async) === true) {
-          <a routerLink="/account/home" class="user-link" title="Go to your account page">
+          <a routerLink="/account/home" class="nav__link nav__link--account">
             {{ username$ | async }}
           </a>
-        } @else {
-          @if (!(router.url === '/account/login')) {
-            <a routerLink="/account/login" class="login-btn" title="Log in to your PianoML account">
-              Login
-            </a>
-          }
+        } @else if (router.url !== '/account/login') {
+          <a routerLink="/account/login" class="btn btn--login">Log in</a>
         }
       </div>
-
     </div>
+
+    <!-- Breadcrumbs sit on their own row so the nav never reflows as they grow -->
+    @if (breadcrumbService.items$ | async; as crumbs) {
+      @if (crumbs.length > 0) {
+        <nav class="crumbs" aria-label="Breadcrumb">
+          @for (item of crumbs; track item.path; let last = $last) {
+            @if (!last) {
+              <a [routerLink]="item.path" class="crumbs__link">{{ item.label }}</a>
+              <span class="crumbs__sep" aria-hidden="true">/</span>
+            } @else {
+              <span class="crumbs__current" aria-current="page">{{ item.label }}</span>
+            }
+          }
+        </nav>
+      }
+    }
   </header>
 
-  <!-- ─── CONTENT ──────────────────────────────────────────────── -->
-  <div class="flex-1 flex flex-col">
+  <!-- ── Content ────────────────────────────────────────────────────────── -->
+  <main class="content">
     <router-outlet />
-  </div>
+  </main>
 
-  <!-- ─── FOOTER ───────────────────────────────────────────────── -->
-  <footer class="site-footer" role="contentinfo">
-    <div class="footer-inner">
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer__inner">
+      <span class="footer__brand">PiLearn</span>
 
-      <!-- Brand + version -->
-      <div class="footer-link">
-
-        <a href="https://github.com/piano-ml/piano-ml"
-           class="footer-icon-link"
-           aria-label="View source on GitHub"
-           title="View PianoML source code on GitHub"
-           target="_blank" rel="noopener noreferrer">
-          <ng-icon name="bootstrapGithub"></ng-icon>
-          <span class="ml-2 pb-2">source</span>
-        </a>
-
-      </div>
-
-      <!-- Navigation légale -->
-      <nav class="footer-links" aria-label="Footer navigation">
-        <a href="/blog/legal" class="footer-link" title="Legal notice and terms of use">
-          Legal Notice
-        </a>
-        <span class="footer-sep" aria-hidden="true">&middot;</span>
-        <a href="https://github.com/piano-ml/piano-ml/issues"
-           class="footer-link"
-           target="_blank" rel="noopener noreferrer"
-           title="Report a bug or request a feature">
-          Report an Issue
-        </a>
+      <nav class="footer__links" aria-label="Footer">
+        <a href="/blog/legal" class="footer__link">Legal</a>
+        <a
+          href="https://github.com/piano-ml/piano-ml"
+          class="footer__link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Source</a>
+        <a
+          href="https://github.com/piano-ml/piano-ml/issues"
+          class="footer__link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Report an issue</a>
       </nav>
 
-      <!-- Social + copyright -->
-      <div class="footer-link">
-
-        PianoML&#64;{{ version.commit }}
-        
-      </div>
-
+      <span class="footer__version">{{ version.commit }}</span>
     </div>
   </footer>
-
 </div>

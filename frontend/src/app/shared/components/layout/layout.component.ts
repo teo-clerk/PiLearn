@@ -1,27 +1,53 @@
-import { Component, ChangeDetectorRef, OnDestroy, inject, PLATFORM_ID, NgZone } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, computed, inject, PLATFORM_ID, NgZone, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { RouterModule } from '@angular/router';
 // biome-ignore lint/style/useImportType: <explanation>
 import { BreadcrumbService } from '../../services/breadcrumb.service';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { NgIcon, provideIcons } from '@ng-icons/core';
-//import { ShareButtons } from 'ngx-sharebuttons/buttons';
-import {  bootstrapGithub } from '@ng-icons/bootstrap-icons';
 
 import { map, Observable, tap } from 'rxjs';
 import { AuthService } from '../../../account/services/auth.service';
 
 import versionInfo from '../../../../assets/version.json';
+import { MidiServiceService } from '../../services/midi-service.service';
 
 @Component({
   selector: 'app-layout',
-  imports: [RouterModule, CommonModule,   NgIcon],
+  imports: [RouterModule, CommonModule],
   templateUrl: './layout.component.html',
   styleUrl: './layout.component.css',
-    viewProviders: [provideIcons({ bootstrapGithub })],
 })
 export class LayoutComponent implements OnDestroy {  
     version = versionInfo;
+
+  private readonly midiService = inject(MidiServiceService);
+
+  /**
+   * Whether this browser implements WebMIDI at all.
+   *
+   * Reported separately from connection state so a Firefox user sees "not supported"
+   * rather than sitting forever on "not connected" and hunting for a cable.
+   */
+  readonly midiSupported = signal(
+    isPlatformBrowser(inject(PLATFORM_ID)) &&
+      typeof navigator !== 'undefined' &&
+      'requestMIDIAccess' in navigator,
+  );
+
+  /** True once a note has arrived from a device — the only proof one is really live. */
+  readonly midiConnected = computed(() => this.midiService.midiEvent() !== null);
+
+  readonly midiLabel = computed(() => {
+    if (!this.midiSupported()) return 'MIDI unavailable';
+    return this.midiConnected() ? 'MIDI connected' : 'No MIDI';
+  });
+
+  readonly midiTitle = computed(() => {
+    if (!this.midiSupported()) return 'WebMIDI is only available in Chromium-based browsers';
+    return this.midiConnected()
+      ? 'A MIDI device is sending notes'
+      : 'Connect a MIDI keyboard, or use your computer keyboard in practice';
+  });
   private platformId = inject(PLATFORM_ID);
   private changeDetector = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);

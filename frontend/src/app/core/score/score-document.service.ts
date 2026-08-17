@@ -189,7 +189,7 @@ export class ScoreDocumentService {
     // `/practice/demo` serves a prebuilt score from assets so the surface can be
     // exercised with no backend, database or OMR pipeline running.
     if (DemoScoreService.isDemo(scoreId)) {
-      return this.demo.load().pipe(
+      return this.demo.load(scoreId).pipe(
         tap(({ document, roadmap }) => {
           this.state.set({ loading: false, error: null, document, roadmap });
         }),

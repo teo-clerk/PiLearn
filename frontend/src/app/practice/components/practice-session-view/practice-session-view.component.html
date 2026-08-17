@@ -65,6 +65,12 @@
         <button type="button" class="btn btn--ghost" (click)="backToLibrary()">
           Library
         </button>
+        <button
+          type="button"
+          class="btn btn--ghost"
+          (click)="restartTour()"
+          title="Show the quick tour again"
+        >Help</button>
 
         <app-input-source-selector
           [active]="inputSource()"
@@ -153,6 +159,10 @@
         </div>
       </div>
     </footer>
+  }
+
+  @if (showTour()) {
+    <app-practice-tour (completed)="onTourCompleted()" />
   }
 
   @if (showSummary() && lastResult(); as result) {

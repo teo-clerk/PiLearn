@@ -1,0 +1,148 @@
+/* Hero. Tokens duplicated locally so the component stands alone. */
+:host {
+  display: block;
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #191d23;
+  --border: #252a32;
+  --text: #edeff2;
+  --muted: #98a0ac;
+  --accent: #6366f1;
+  --accent-2: #22d3ee;
+  --radius: 14px;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 5vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+}
+
+/* Single soft gradient wash. Cheap — one painted element, no blur filter, no canvas. */
+.hero__glow {
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 70%;
+  background:
+    radial-gradient(60% 60% at 30% 20%, rgb(99 102 241 / 22%), transparent 70%),
+    radial-gradient(50% 50% at 75% 10%, rgb(34 211 238 / 14%), transparent 70%);
+  pointer-events: none;
+}
+
+.hero__content { position: relative; max-width: 62rem; margin: 0 auto; }
+
+.hero__eyebrow {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.hero__title {
+  margin: 0 0 1.1rem;
+  font-size: clamp(2rem, 5.2vw, 3.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+.hero__title-accent {
+  background: linear-gradient(100deg, var(--accent-2), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero__lede {
+  margin: 0 0 1.6rem;
+  max-width: 44rem;
+  font-size: clamp(0.95rem, 1.3vw, 1.1rem);
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 2rem; padding: 0; list-style: none; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  backdrop-filter: blur(8px);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.pill__icon { font-size: 0.9rem; }
+
+.hero__actions {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  max-width: 46rem;
+}
+
+.hero__error {
+  margin: 0.85rem 0 0;
+  font-size: 0.82rem;
+  color: #fca5a5;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.15rem;
+  padding: 0.85rem 1.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--accent), #4f46e5);
+  color: #fff;
+  box-shadow: 0 8px 26px rgb(79 70 229 / 32%);
+}
+.btn--primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgb(79 70 229 / 42%); }
+
+.btn__hint { font-size: 0.68rem; font-weight: 400; opacity: 0.8; }
+
+.btn--ghost {
+  background: transparent; border-color: var(--border); color: var(--text);
+}
+.btn--ghost:hover { background: var(--surface-2); }
+
+/* ── Dropzone ───────────────────────────────────────────────────────────── */
+.dropzone {
+  position: relative;
+  display: flex; align-items: center; gap: 0.8rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms;
+}
+.dropzone:hover, .dropzone--active {
+  border-color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 8%, var(--surface));
+}
+.dropzone__input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dropzone__icon { font-size: 1.2rem; color: var(--accent-2); }
+.dropzone__text { display: flex; flex-direction: column; }
+.dropzone__text strong { font-size: 0.88rem; }
+.dropzone__hint { font-size: 0.72rem; color: var(--muted); }
+
+
+@media (max-width: 720px) { .hero__actions { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .dropzone { transition: none; }
+  .btn--primary:hover { transform: none; }
+}

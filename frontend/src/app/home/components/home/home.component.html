@@ -1,36 +1,58 @@
+<div class="home">
+  <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+  <app-home-hero [pills]="pills" (fileAccepted)="onFileAccepted($event)" />
 
-<main class="flex flex-col h-full" itemscope itemtype="https://schema.org/WebApplication">
-  <meta itemprop="name" content="PianoML">
-  <meta itemprop="applicationCategory" content="EducationalApplication">
-  <meta itemprop="operatingSystem" content="Web Browser">
+  <!-- ── How it works ─────────────────────────────────────────────────────── -->
+  <section class="section" aria-labelledby="how-heading">
+    <header class="section__header">
+      <h2 id="how-heading" class="section__title">How it works</h2>
+      <p class="section__lede">
+        Four stages, in the order a teacher would give them to you.
+      </p>
+    </header>
 
-      <header class="page-title text-center">
-        <h1 id="main-heading" itemprop="headline">A Machine to Learn Piano</h1>
-
-      </header>
-  
-  <section id="section1" class="section1" aria-labelledby="main-heading">
-
-    @if (isMobileOrTablet()) {
-      <app-homecss class="css-background"></app-homecss>
-    } @else {
-      <app-homegl class="gl-background"></app-homegl>
-    }
-
-
-    <div class="absolute inset-0 z-1 flex flex-col items-center justify-center gap-2 mt-4">
-
-
-
-      <a 
-        class="btn-hero mt-4"
-        (click)="summary()"
-        title="Start learning piano with PianoML"
-        aria-label="Start your piano learning journey">Take a seat</a>
-    </div>
-
+    <ol class="steps">
+      @for (step of steps; track step.index) {
+        <li class="step">
+          <div class="step__marker">
+            <span class="step__icon" aria-hidden="true">{{ step.icon }}</span>
+            <span class="step__number">{{ step.index }}</span>
+          </div>
+          <h3 class="step__title">{{ step.title }}</h3>
+          <p class="step__body">{{ step.body }}</p>
+        </li>
+      }
+    </ol>
   </section>
 
+  <!-- ── Demo shelf ───────────────────────────────────────────────────────── -->
+  @if (hasDemos()) {
+    <section class="section" aria-labelledby="demos-heading">
+      <header class="section__header">
+        <h2 id="demos-heading" class="section__title">Start with a classic</h2>
+        <p class="section__lede">
+          Public-domain pieces, already transcribed and chunked. One click to practise.
+        </p>
+      </header>
 
+      <div class="shelf">
+        @for (demo of demos(); track demo.slug) {
+          <app-demo-card [demo]="demo" (practice)="practice($event)" />
+        }
+      </div>
+    </section>
+  }
 
-</main>
+  <!-- ── Closing CTA ──────────────────────────────────────────────────────── -->
+  <section class="closing">
+    <h2 class="closing__title">Bring your own music</h2>
+    <p class="closing__lede">
+      Any PDF, MusicXML or MIDI file. If a page cannot be read cleanly, PiLearn says so
+      instead of handing you a plan built on bars that are not there.
+    </p>
+    <div class="closing__actions">
+      <a class="btn btn--primary" routerLink="/import">Upload sheet music</a>
+      <a class="btn btn--ghost" routerLink="/library">Browse the library</a>
+    </div>
+  </section>
+</div>
