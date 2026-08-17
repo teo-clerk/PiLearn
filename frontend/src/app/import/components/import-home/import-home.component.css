@@ -1,0 +1,170 @@
+:host {
+  display: block;
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #191d23;
+  --border: #252a32;
+  --text: #edeff2;
+  --muted: #98a0ac;
+  --accent: #6366f1;
+  --accent-2: #22d3ee;
+  --ok: #22c55e;
+  --warn: #eab308;
+  --err: #ef4444;
+}
+
+.import {
+  min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 4rem) 1rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.panel {
+  width: min(38rem, 100%);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--surface), var(--bg));
+}
+
+.panel__head { margin-bottom: 1.4rem; }
+.panel__title { margin: 0 0 0.4rem; font-size: clamp(1.2rem, 2.4vw, 1.55rem); letter-spacing: -0.015em; }
+.panel__lede { margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--muted); }
+
+/* ── Dropzone ───────────────────────────────────────────────────────────── */
+.dropzone {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+  padding: clamp(1.75rem, 5vw, 3rem) 1rem;
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 140ms, background 140ms;
+}
+.dropzone:hover, .dropzone--active {
+  border-color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 7%, var(--surface-2));
+}
+.dropzone__input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dropzone__icon { font-size: 1.7rem; color: var(--accent-2); }
+.dropzone__title { font-size: 0.92rem; font-weight: 600; }
+.dropzone__formats { font-size: 0.74rem; color: var(--muted); }
+
+.error {
+  margin: 0.85rem 0 0; padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  color: #fca5a5; font-size: 0.8rem;
+}
+
+/* ── Shortcuts ──────────────────────────────────────────────────────────── */
+.shortcuts { margin-top: 1.4rem; }
+.shortcuts__label { display: block; margin-bottom: 0.5rem; font-size: 0.75rem; color: var(--muted); }
+.shortcuts__list { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.chip {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text);
+  font-size: 0.78rem; cursor: pointer;
+  transition: border-color 140ms, background 140ms;
+}
+.chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* ── Notice ─────────────────────────────────────────────────────────────── */
+.notice {
+  margin-bottom: 1.1rem; padding: 0.7rem 0.85rem;
+  border-radius: 10px; font-size: 0.78rem; line-height: 1.5;
+}
+.notice--dev {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  color: #fde047;
+}
+
+/* ── Stepper ────────────────────────────────────────────────────────────── */
+.stepper { list-style: none; margin: 0 0 1.3rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.step {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.83rem;
+  transition: border-color 200ms, opacity 200ms;
+}
+.step__icon { font-size: 0.95rem; }
+.step__label { flex: 1; }
+.step__mark { display: inline-flex; width: 1rem; justify-content: center; }
+
+.step[data-state='pending'] { opacity: 0.45; }
+.step[data-state='active'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+.step[data-state='done'] { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.step[data-state='done'] .step__mark { color: var(--ok); }
+
+.spinner {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 640ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Progress ───────────────────────────────────────────────────────────── */
+.progress { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.7rem; }
+.progress__track { flex: 1; height: 7px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 320ms ease-out;
+}
+.progress__value { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.4rem; text-align: right; }
+
+.status { margin: 0 0 0.3rem; font-size: 0.83rem; }
+.hint { margin: 0; font-size: 0.74rem; color: var(--muted); }
+
+/* ── Failure dialog ─────────────────────────────────────────────────────── */
+.backdrop {
+  position: fixed; inset: 0; z-index: 60; padding: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  background: rgb(6 8 11 / 68%);
+}
+.dialog {
+  width: min(28rem, 100%);
+  padding: 1.3rem;
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 45%);
+}
+.dialog__title { margin: 0 0 0.5rem; font-size: 1.02rem; }
+.dialog__body { margin: 0 0 0.6rem; font-size: 0.84rem; line-height: 1.55; color: var(--muted); }
+.dialog__detail {
+  margin: 0 0 0.7rem; padding: 0.5rem 0.7rem; border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: #fde047; font-size: 0.78rem; line-height: 1.5;
+}
+.dialog__code { margin: 0 0 1rem; font-size: 0.7rem; color: #6b7280; font-family: ui-monospace, monospace; }
+.dialog__actions { display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
+
+.btn {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: transparent; color: var(--text);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer;
+}
+.btn:hover { background: var(--surface-2); }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn--primary:hover { background: #4f46e5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .progress__fill, .step, .dropzone, .chip { transition: none; }
+}

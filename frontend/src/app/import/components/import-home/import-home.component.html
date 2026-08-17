@@ -1,0 +1,130 @@
+<div class="import">
+  <div class="panel">
+
+    <!-- ── Processing ──────────────────────────────────────────────────── -->
+    @if (isProcessing()) {
+      <header class="panel__head">
+        <h1 class="panel__title">Processing your score</h1>
+        <p class="panel__lede">{{ fileName() }}</p>
+      </header>
+
+      @if (isSimulated()) {
+        <div class="notice notice--dev" role="status">
+          <strong>Dev mode — simulating OMR conversion.</strong>
+          The backend is not reachable, so this run is simulated and will open the demo
+          score.
+        </div>
+      }
+
+      <ol class="stepper">
+        @for (step of steps; track step.stage) {
+          <li class="step" [attr.data-state]="stepState(step.stage)">
+            <span class="step__icon" aria-hidden="true">{{ step.icon }}</span>
+            <span class="step__label">{{ step.label }}</span>
+            <span class="step__mark" aria-hidden="true">
+              @if (stepState(step.stage) === 'done') { ✓ }
+              @else if (stepState(step.stage) === 'active') {
+                <span class="spinner"></span>
+              }
+            </span>
+          </li>
+        }
+      </ol>
+
+      <div class="progress">
+        <div
+          class="progress__track"
+          role="progressbar"
+          [attr.aria-valuenow]="progressPercent()"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div class="progress__fill" [style.width.%]="progressPercent()"></div>
+        </div>
+        <span class="progress__value">{{ progressPercent() }}%</span>
+      </div>
+
+      <p class="status" aria-live="polite">{{ statusMessage() }}</p>
+      <p class="hint">
+        Multi-page PDFs usually take 5–15 seconds. You can leave this tab open.
+      </p>
+    }
+
+    <!-- ── Idle: drop target ───────────────────────────────────────────── -->
+    @else {
+      <header class="panel__head">
+        <h1 class="panel__title">Upload sheet music</h1>
+        <p class="panel__lede">
+          Drop in a PDF and PiLearn will transcribe it, work out where the hard bars
+          are, and build you a practice plan.
+        </p>
+      </header>
+
+      <label
+        class="dropzone"
+        [class.dropzone--active]="isDragging()"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDrop($event)"
+      >
+        <input
+          type="file"
+          class="dropzone__input"
+          accept=".pdf,.musicxml,.xml,.mxl,.mid,.midi"
+          (change)="onFileInput($event)"
+        />
+        <span class="dropzone__icon" aria-hidden="true">⇪</span>
+        <span class="dropzone__title">Drop a file here, or click to browse</span>
+        <span class="dropzone__formats">PDF · MusicXML · MIDI — up to 50 MB</span>
+      </label>
+
+      @if (validationError(); as message) {
+        <p class="error" role="alert">{{ message }}</p>
+      }
+
+      @if (quickDemos().length > 0) {
+        <div class="shortcuts">
+          <span class="shortcuts__label">Or try a demo score</span>
+          <div class="shortcuts__list">
+            @for (demo of quickDemos(); track demo.slug) {
+              <button type="button" class="chip" (click)="practiceDemo(demo.slug)">
+                {{ demo.title }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- ── Failure ───────────────────────────────────────────────────────── -->
+  @if (failure(); as error) {
+    <div class="backdrop" (click)="dismissFailure()">
+      <div
+        class="dialog"
+        role="alertdialog"
+        aria-labelledby="failure-title"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 id="failure-title" class="dialog__title">That score could not be processed</h2>
+        <p class="dialog__body">{{ error.message }}</p>
+
+        @if (error.droppedPages.length > 0) {
+          <p class="dialog__detail">
+            Pages {{ error.droppedPages.join(', ') }} could not be read. A plan built on
+            this score would be missing those bars.
+          </p>
+        }
+
+        <p class="dialog__code">Error code: {{ error.code }}</p>
+
+        <div class="dialog__actions">
+          <button type="button" class="btn" (click)="dismissFailure()">Try another file</button>
+          <button type="button" class="btn btn--primary" (click)="practiceDemo()">
+            Play a demo instead
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

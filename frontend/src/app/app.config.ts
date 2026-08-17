@@ -18,7 +18,7 @@ registerLocaleData(localeIt);
 
 import { routes } from './app.routes';
 import { provideNgIconLoader, withCaching } from '@ng-icons/core';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { authInterceptor } from './account/interceptors/auth.interceptor';
 
 import { provideApi } from './core/api';
@@ -32,7 +32,9 @@ export const appConfig: ApplicationConfig = {
       provide: LOCALE_ID,
       useValue:  'en-US'
     },
-    provideHttpClient(withInterceptors([authInterceptor])),
+    // withFetch(): silences NG02801 and, on the server, routes requests through the
+    // Node fetch stack instead of the deprecated XHR shim that emits DEP0169.
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     provideApi({ basePath: environment.api, withCredentials: true }),
     provideNgIconLoader(name => {
       const http = inject(HttpClient);
