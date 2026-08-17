@@ -364,7 +364,16 @@ class AlignmentIndex(Frozen):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Segment(Frozen):
-    """A phrase. Chunk boundaries are chosen from these, never from bar arithmetic."""
+    """A MUSICAL phrase — where the music breathes.
+
+    Segments describe the score. They are derived from cadences, rests, double barlines
+    and texture changes, and they exist whether or not anyone ever practises the piece.
+
+    Distinct from `Chunk` (below), which is a PEDAGOGICAL unit. Chunk boundaries are
+    chosen from segment boundaries, but the two are not 1:1: a long phrase may be split
+    into several chunks, and a hard single bar may become a chunk of its own inside a
+    phrase. Conflating them is what produced the contract mismatch this pair replaces.
+    """
 
     id: str
     start_measure: int = Field(ge=0)
@@ -377,6 +386,55 @@ class Segment(Frozen):
         "PERFECT", "IMPERFECT", "HALF", "DECEPTIVE", "PLAGAL"
     ] | None = None
     confidence: Confidence = 1.0
+
+
+class Chunk(Frozen):
+    """A PEDAGOGICAL practice unit — what a learner works on in one sitting.
+
+    Consumed directly by `RoadmapService` on the Java side, which builds a stage ladder
+    (hands separate → together → tempo ramp) over each chunk. Field names here are the
+    wire contract for that deserialisation.
+
+    `kind`:
+      PRIMARY  a normal practice window, phrase-aligned where possible
+      MICRO    a single bar isolated because it dominates its neighbours in difficulty
+      JOIN     two mastered adjacent chunks recombined (generated during practice, not
+               at ingestion)
+      REVIEW   spaced repetition of previously mastered material
+    """
+
+    id: str
+    ordinal: int = Field(ge=0, description="Position in practice order.")
+    start_measure: int = Field(ge=0, description="Inclusive, notation index.")
+    end_measure: int = Field(ge=0, description="Inclusive, notation index.")
+    measure_count: int = Field(gt=0)
+    difficulty: float = Field(ge=0.0, le=10.0, description="Mean of the member measures.")
+    kind: Literal["PRIMARY", "MICRO", "JOIN", "REVIEW"] = "PRIMARY"
+    label: str = Field(description="Human-readable, e.g. 'Bars 5-8'.")
+    boundary_reason: str = Field(
+        default="SIZE", description="Why the chunk ends where it does."
+    )
+    segment_ids: tuple[str, ...] = Field(
+        default=(), description="Segments this chunk overlaps."
+    )
+    patterns: tuple[TechnicalPattern, ...] = Field(
+        default=(), description="Union of technical patterns across member measures."
+    )
+
+    @model_validator(mode="after")
+    def _check_range(self) -> Chunk:
+        if self.end_measure < self.start_measure:
+            raise ValueError(
+                f"chunk {self.id}: end_measure {self.end_measure} precedes "
+                f"start_measure {self.start_measure}"
+            )
+        expected = self.end_measure - self.start_measure + 1
+        if self.measure_count != expected:
+            raise ValueError(
+                f"chunk {self.id}: measure_count {self.measure_count} does not match "
+                f"the range {self.start_measure}..{self.end_measure} ({expected})"
+            )
+        return self
 
 
 class HarmonyEntry(Frozen):
@@ -475,7 +533,13 @@ class ScoreDocument(Frozen):
     )
     alignment: AlignmentIndex
 
-    segments: tuple[Segment, ...] = ()
+    segments: tuple[Segment, ...] = Field(
+        default=(), description="Musical phrases — where the music breathes."
+    )
+    chunks: tuple[Chunk, ...] = Field(
+        default=(),
+        description="Pedagogical practice units. Consumed by RoadmapService.",
+    )
     harmony: tuple[HarmonyEntry, ...] = ()
     difficulty: DifficultySummary | None = None
     confidence: ConfidenceReport
@@ -536,6 +600,37 @@ class ScoreDocument(Frozen):
         ]
         if dangling:
             raise ValueError(f"alignment references unknown note ids: {dangling[:5]}")
+
+        # Chunks drive practice, so a chunk pointing at a bar that does not exist would
+        # send a learner to an empty screen.
+        for chunk in self.chunks:
+            missing = [
+                i for i in range(chunk.start_measure, chunk.end_measure + 1)
+                if i not in measure_indices
+            ]
+            if missing:
+                raise ValueError(
+                    f"chunk {chunk.id} covers measures that do not exist: {missing[:5]}"
+                )
+
+        if self.chunks:
+            covered: list[int] = []
+            for chunk in self.chunks:
+                covered.extend(range(chunk.start_measure, chunk.end_measure + 1))
+            duplicates = {i for i in covered if covered.count(i) > 1}
+            if duplicates:
+                raise ValueError(
+                    f"measures appear in more than one chunk: {sorted(duplicates)[:5]}. "
+                    "Practice units must partition the score, not overlap."
+                )
+
+        segment_ids = {segment.id for segment in self.segments}
+        for chunk in self.chunks:
+            unknown = [sid for sid in chunk.segment_ids if sid not in segment_ids]
+            if unknown:
+                raise ValueError(
+                    f"chunk {chunk.id} references unknown segments: {unknown[:5]}"
+                )
 
         if self.confidence.status is ReviewStatus.OK and self.confidence.dropped_pages:
             raise ValueError(

@@ -1,6 +1,8 @@
 package org.pianoml.backend.learning;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.pianoml.backend.document.ScoreDocumentEntity;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class RoadmapService {
 
   private final ScoreDocumentService documentService;
+  private final ObjectMapper objectMapper;
 
   /** Tempo ladder multiplier per rung (PRODUCT_SPEC §5.2). */
   private static final double TEMPO_RAMP_FACTOR = 1.10;
@@ -73,35 +76,60 @@ public class RoadmapService {
   private List<RoadmapChunk> buildChunks(
       JsonNode document, double targetTempo, RoadmapParams params) {
 
-    JsonNode chunkNodes = document.path("chunks");
     List<RoadmapChunk> chunks = new ArrayList<>();
+    List<ScoreDocumentChunk> documentChunks = readChunks(document);
+    boolean bothHands = hasBothHands(document);
 
-    // Documents analysed before chunking existed still have measures; fall back to a
-    // single whole-piece chunk rather than returning an empty roadmap.
-    if (!chunkNodes.isArray() || chunkNodes.isEmpty()) {
+    // Fallback for documents analysed before chunking existed. Deliberately WARN, not
+    // INFO: this path produces a single undifferentiated practice unit for the whole
+    // piece, which is a badly degraded roadmap. It ran silently for every score while
+    // the worker emitted `segments` and no `chunks` field at all, and nobody noticed.
+    if (documentChunks.isEmpty()) {
       int measureCount = document.path("meta").path("measure_count").asInt(0);
       if (measureCount == 0) {
+        log.warn("document has neither chunks nor measures; returning an empty roadmap");
         return chunks;
       }
-      log.info("document has no chunks; falling back to a single whole-piece chunk");
+      log.warn(
+          "document has no 'chunks' field — falling back to one whole-piece chunk over "
+              + "{} measures. Re-ingest the score to get a real practice breakdown.",
+          measureCount);
       chunks.add(buildChunk(0, 0, measureCount - 1, 5.0,
-          "Bars 1-" + measureCount, targetTempo, params, hasBothHands(document)));
+          "Bars 1-" + measureCount, targetTempo, params, bothHands));
       return chunks;
     }
 
-    int ordinal = 0;
-    for (JsonNode node : chunkNodes) {
+    for (ScoreDocumentChunk chunk : documentChunks) {
       chunks.add(buildChunk(
-          ordinal++,
-          node.path("start_measure").asInt(),
-          node.path("end_measure").asInt(),
-          node.path("difficulty").asDouble(5.0),
-          node.path("label").asText(""),
+          chunk.ordinal(),
+          chunk.startMeasure(),
+          chunk.endMeasure(),
+          chunk.difficulty(),
+          chunk.label(),
           targetTempo,
           params,
-          hasBothHands(document)));
+          bothHands));
     }
     return chunks;
+  }
+
+  /**
+   * Deserialise the worker's pedagogical chunks.
+   *
+   * <p>A malformed chunk array is treated as absent rather than fatal: a roadmap built
+   * from the fallback is degraded but usable, whereas a 500 makes the score unopenable.
+   */
+  private List<ScoreDocumentChunk> readChunks(JsonNode document) {
+    JsonNode node = document.path("chunks");
+    if (!node.isArray() || node.isEmpty()) {
+      return List.of();
+    }
+    try {
+      return objectMapper.convertValue(node, new TypeReference<List<ScoreDocumentChunk>>() {});
+    } catch (IllegalArgumentException e) {
+      log.warn("could not deserialise document chunks; using the fallback: {}", e.getMessage());
+      return List.of();
+    }
   }
 
   private boolean hasBothHands(JsonNode document) {

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pilearn_worker.models.raw import RawMeasure, RawNote, RawPart, RawScore
 from pilearn_worker.models.score_document import (
     AlignmentIndex,
+    Chunk as DocumentChunk,
     ConfidenceReport,
     DifficultySummary,
     Hand,
@@ -124,7 +125,7 @@ class ScoreDocumentBuilder:
             parts[0], primary, playback_order, raw.ppq, timing
         )
 
-        segments = self._build_segments(primary, all_measure_analyses)
+        segments, chunks = self._build_segments_and_chunks(primary, all_measure_analyses)
         meta = self._build_meta(raw, primary, timing)
         summary = self._build_difficulty_summary(all_measure_analyses)
         confidence = self._build_confidence(raw)
@@ -146,6 +147,7 @@ class ScoreDocumentBuilder:
             playback_order=playback_order,
             alignment=alignment,
             segments=segments,
+            chunks=chunks,
             harmony=tuple(
                 HarmonyEntry(
                     measure=h.measure_index,
@@ -533,34 +535,114 @@ class ScoreDocumentBuilder:
 
     # ── Segments, meta, summary ─────────────────────────────────────────────
 
-    def _build_segments(
+    _SEGMENT_REASONS = frozenset(
+        {"CADENCE", "REST", "DOUBLE_BARLINE", "TEXTURE_CHANGE", "REPEAT", "END"}
+    )
+
+    def _build_segments_and_chunks(
         self,
         raw_part: RawPart,
         analyses: dict[int, difficulty_module.MeasureAnalysis],
-    ) -> tuple[Segment, ...]:
+    ) -> tuple[tuple[Segment, ...], tuple[DocumentChunk, ...]]:
+        """Emit BOTH representations, and link them.
+
+        Segments are musical (where the music breathes); chunks are pedagogical (what a
+        learner practises in one sitting). They are derived from the same analysis but
+        are not 1:1 — a long phrase splits into several chunks, and a hard bar becomes a
+        chunk of its own inside a phrase.
+
+        The previous implementation collapsed chunks into segments and emitted no
+        `chunks` field at all, so `RoadmapService.buildChunks()` read a missing key and
+        silently fell back to treating the whole piece as one chunk.
+        """
         rests_by_measure: dict[int, list] = {}
         for rest in raw_part.rests:
             rests_by_measure.setdefault(rest.measure_index, []).append(rest)
 
-        chunks = difficulty_module.build_chunks(
-            list(raw_part.measures), analyses, rests_by_measure
+        measures = list(raw_part.measures)
+
+        # Musical phrases, from boundary analysis alone — no practice sizing applied.
+        segments = self._derive_segments(measures, rests_by_measure)
+
+        # Practice units, difficulty-sized and phrase-aware.
+        pedagogy_chunks = difficulty_module.build_chunks(
+            measures, analyses, rests_by_measure
         )
-        return tuple(
-            Segment(
-                id=f"seg{chunk.ordinal:03d}",
+
+        chunks = tuple(
+            DocumentChunk(
+                id=f"chunk{chunk.ordinal:03d}",
+                ordinal=chunk.ordinal,
                 start_measure=chunk.start_measure,
                 end_measure=chunk.end_measure,
-                kind="PHRASE",
-                boundary_reason=(
-                    chunk.boundary_reason
-                    if chunk.boundary_reason
-                    in ("CADENCE", "REST", "DOUBLE_BARLINE", "TEXTURE_CHANGE", "REPEAT", "END")
-                    else "TEXTURE_CHANGE"
+                measure_count=chunk.measure_count,
+                difficulty=round(min(10.0, max(0.0, chunk.difficulty)), 3),
+                kind="MICRO" if chunk.kind == "MICRO" else "PRIMARY",
+                label=chunk.label,
+                boundary_reason=chunk.boundary_reason,
+                segment_ids=tuple(
+                    segment.id
+                    for segment in segments
+                    if segment.start_measure <= chunk.end_measure
+                    and segment.end_measure >= chunk.start_measure
                 ),
-                confidence=0.8,
+                patterns=self._patterns_in_range(
+                    analyses, chunk.start_measure, chunk.end_measure
+                ),
             )
-            for chunk in chunks
+            for chunk in pedagogy_chunks
         )
+
+        return segments, chunks
+
+    def _derive_segments(
+        self, measures: list[RawMeasure], rests_by_measure: dict[int, list]
+    ) -> tuple[Segment, ...]:
+        """Musical phrases: cut only at real boundaries, with no size target."""
+        boundaries = difficulty_module._phrase_boundaries(  # noqa: SLF001 - same package
+            measures, rests_by_measure, ppq=1
+        )
+
+        segments: list[Segment] = []
+        start = 0
+        for position, measure in enumerate(measures):
+            reason = boundaries.get(measure.index)
+            is_last = position == len(measures) - 1
+            if reason is None and not is_last:
+                continue
+
+            segments.append(
+                Segment(
+                    id=f"seg{len(segments):03d}",
+                    start_measure=measures[start].index,
+                    end_measure=measure.index,
+                    kind="PHRASE",
+                    boundary_reason=(
+                        reason if reason in self._SEGMENT_REASONS else "END"
+                    ),
+                    confidence=0.8 if reason in ("REST", "DOUBLE_BARLINE") else 0.6,
+                )
+            )
+            start = position + 1
+
+        return tuple(segments)
+
+    def _patterns_in_range(
+        self,
+        analyses: dict[int, difficulty_module.MeasureAnalysis],
+        start: int,
+        end: int,
+    ) -> tuple[TechnicalPattern, ...]:
+        found: list[TechnicalPattern] = []
+        for index in range(start, end + 1):
+            analysis = analyses.get(index)
+            if not analysis:
+                continue
+            for pattern in analysis.patterns:
+                converted = TechnicalPattern(pattern.value)
+                if converted not in found:
+                    found.append(converted)
+        return tuple(found)
 
     def _build_meta(
         self, raw: RawScore, raw_part: RawPart, timing: dict[int, tuple[float, float]]

@@ -1,4 +1,14 @@
 <div class="keyboard-super">
-    <div class="container-keyboard" id="keyboard" #keyboardContainer>
-    </div>
+  <div class="container-keyboard" id="keyboard">
+    <!-- Native SVG keyboard. Replaces the imperatively-constructed pianokeys widget;
+         the component instance is handed to PlayerKeyboardService, which still drives
+         velocity-graded highlighting through fillKey/clearKey. -->
+    <app-virtual-keyboard
+      [lowestMidi]="lowestMidi()"
+      [highestMidi]="highestMidi()"
+      [keyHeight]="resolvedKeyHeight()"
+      (keyDown)="onKeyDown($event)"
+      (keyUp)="onKeyUp($event)"
+    />
+  </div>
 </div>

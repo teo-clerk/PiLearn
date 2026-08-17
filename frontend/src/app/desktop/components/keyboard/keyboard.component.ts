@@ -1,14 +1,14 @@
-import { ChangeDetectionStrategy, Component, type ElementRef, ViewChild, signal, effect, type EffectRef, OnDestroy, PLATFORM_ID, inject, Input, AfterViewInit } from "@angular/core";
+import { ChangeDetectionStrategy, Component, ViewChild, signal, effect, type EffectRef, OnDestroy, PLATFORM_ID, inject, Input, AfterViewInit } from "@angular/core";
 import { isPlatformBrowser } from '@angular/common';
 import { MidiServiceService } from "../../../shared/services/midi-service.service";
-import PianoKeys from '@jesperdj/pianokeys';
-import { midiToPitch } from "../../service/midi-maths";
+import { VirtualKeyboardComponent, type KeyPressEvent } from '../../../practice/components/virtual-keyboard/virtual-keyboard.component';
+import { nameToMidi } from '../../../practice/components/virtual-keyboard/keyboard-geometry';
 import { PlayerKeyboardService } from "../../service/player-keyboard.service";
 
 
 @Component({
   selector: 'app-keyboard',
-  imports: [],
+  imports: [VirtualKeyboardComponent],
   templateUrl: './keyboard.component.html',
   styleUrl: './keyboard.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,9 +21,8 @@ export class KeyboardComponent implements OnDestroy, AfterViewInit {
 
   private effectRefs: EffectRef[] = [];
 
-  @ViewChild('keyboardContainer')
-  keyboardContainer!: ElementRef;
-  keyboard: PianoKeys.Keyboard | null = null;
+  @ViewChild(VirtualKeyboardComponent)
+  virtualKeyboard?: VirtualKeyboardComponent;
 
   @Input() minKey: string = 'A0';
   @Input() maxKey: string = 'C8';
@@ -42,21 +41,56 @@ export class KeyboardComponent implements OnDestroy, AfterViewInit {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
-    const preferences = localStorage.getItem("preferences");
-    const parsedPreferences = JSON.parse(preferences || '{}');
-    const leftmostKey = this.minKey || midiToPitch(parsedPreferences.leftmostKey || 21) || null;
-    const rightmostKey = this.maxKey || midiToPitch(parsedPreferences.rightmostKey || 108) || null;
+    // Hand the rendered component to PlayerKeyboardService, which drives velocity-graded
+    // highlighting through fillKey/clearKey exactly as it did with pianokeys.
+    if (this.virtualKeyboard) {
+      this.keyboardService.setPianoKeys(this.virtualKeyboard);
+    }
+  }
 
-    const computedKeyHeight = this.keyHeight ?? 140;
-    this.keyboard = new PianoKeys.Keyboard(
-      this.keyboardContainer.nativeElement,
-      {
-        keyHeight: computedKeyHeight,
-        lowest: leftmostKey,
-        highest: rightmostKey
-      });
-    this.keyboardService.setPianoKeys(this.keyboard);
-    this.attachKeyboardListeners();
+  /**
+   * Resolve the key range from inputs, falling back to stored user preferences.
+   *
+   * Reads localStorage lazily rather than in a field initialiser: this component is
+   * rendered under SSR, where localStorage does not exist.
+   */
+  private storedPreference(key: 'leftmostKey' | 'rightmostKey', fallback: number): number {
+    if (!isPlatformBrowser(this.platformId)) return fallback;
+    try {
+      const raw = localStorage.getItem('preferences');
+      const parsed = raw ? JSON.parse(raw) : {};
+      const value = Number(parsed?.[key]);
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  lowestMidi(): number {
+    return nameToMidi(this.minKey) ?? this.storedPreference('leftmostKey', 21);
+  }
+
+  highestMidi(): number {
+    return nameToMidi(this.maxKey) ?? this.storedPreference('rightmostKey', 108);
+  }
+
+  resolvedKeyHeight(): number {
+    return this.keyHeight ?? 140;
+  }
+
+  /**
+   * Note: the component emits TRUE MIDI numbers. The pianokeys callbacks it replaces
+   * reported note numbers an octave low, which every call site corrected with
+   * `12 + Number(keyInfo.note)`. That correction is gone along with the offset.
+   */
+  onKeyDown(event: KeyPressEvent): void {
+    this.keyPressed.set({ key: event.midi, timestamp: Date.now() });
+    this.keyboardService.press(event.name, event.midi);
+  }
+
+  onKeyUp(event: KeyPressEvent): void {
+    this.keyReleased.set({ key: event.midi, timestamp: Date.now() });
+    this.keyboardService.release(event.name, event.midi);
   }
 
   private registerWithMidiService(): void {
@@ -85,25 +119,6 @@ export class KeyboardComponent implements OnDestroy, AfterViewInit {
       effectRef.destroy();
     }
     this.effectRefs = [];
-  }
-
-  private attachKeyboardListeners(): void {
-
-    if (this.keyboard === null) {
-      console.error('Keyboard instance is not initialized.');
-      return;
-    }
-
-    this.keyboard.setOnKeyMouseDown((event: MouseEvent, keyInfo: { note: number, name: string }) => {
-      this.keyPressed.set({ key: 12 + Number(keyInfo.note), timestamp: Date.now() });
-      this.keyboardService.press(keyInfo.name, 12 + Number(keyInfo.note)); // Ensure the note is released before pressing again (handles repeated notes)
-    });
-
-    this.keyboard.setOnKeyMouseUp((event: MouseEvent, keyInfo: { note: number, name: string }) => {
-      this.keyReleased.set({ key: 12 + Number(keyInfo.note), timestamp: Date.now() });
-      this.keyboardService.release(keyInfo.name, 12 + Number(keyInfo.note));
-    });
-
   }
 
 }

@@ -118,4 +118,32 @@ public class Score {
   @Column(columnDefinition = "text")
   private String description;
 
+  // ── Ingestion state (Liquibase changeset 021) ────────────────────────────
+  // Denormalised from score_document so the library can filter and display without
+  // joining or parsing a JSONB blob per row.
+
+  /** Latest score_document revision; null until the first successful ingestion. */
+  @Column(name = "current_revision")
+  private Integer currentRevision;
+
+  /** NONE | QUEUED | RUNNING | COMPLETED | REVIEW_REQUIRED | FAILED. */
+  @Column(name = "processing_status", length = 32)
+  private String processingStatus = "NONE";
+
+  @Column(name = "document_confidence")
+  private Double documentConfidence;
+
+  /** The OMR job that produced the current revision; also the idempotency key. */
+  @Column(name = "omr_job_id", length = 64)
+  private String omrJobId;
+
+  /**
+   * PUBLIC_DOMAIN | LICENSED | USER_UPLOAD_PRIVATE.
+   *
+   * <p>Defaults to private. The legacy default was `publicDomain = true`, which made
+   * every upload public unless something actively said otherwise (AUDIT §R5).
+   */
+  @Column(name = "rights", length = 32)
+  private String rights = "USER_UPLOAD_PRIVATE";
+
 }

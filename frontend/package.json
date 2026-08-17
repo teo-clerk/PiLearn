@@ -29,7 +29,6 @@
     "@angular/router": "21.2.11",
     "@angular/ssr": "21.2.11",
     "@angular/youtube-player": "21.2.11",
-    "@jesperdj/pianokeys": "github:piano-ml/pianokeys",
     "@ng-icons/bootstrap-icons": "^33.2.2",
     "@ng-icons/core": "^31.2.0",
     "@stringsync/musicxml": "^0.3.0",

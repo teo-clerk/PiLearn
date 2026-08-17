@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import type { Note } from '@tonejs/midi/dist/Note';
-import PianoKeys from '@jesperdj/pianokeys';
+import type { VirtualKeyboardComponent } from '../../practice/components/virtual-keyboard/virtual-keyboard.component';
 import { midiToPitch } from './midi-maths';
 
 /**
@@ -11,7 +11,12 @@ import { midiToPitch } from './midi-maths';
 })
 export class PlayerKeyboardService {
 
-  pianoKeys: PianoKeys.Keyboard | null = null;
+  /**
+   * The rendered keyboard. Typed as the native component rather than the old
+   * `PianoKeys.Keyboard`; the three methods used here (fillKey/clearKey) are
+   * identical, so nothing below changed.
+   */
+  pianoKeys: VirtualKeyboardComponent | null = null;
   keyPressed = new Set<string>();
 
  COLOR_RIGHT = [
@@ -44,7 +49,7 @@ export class PlayerKeyboardService {
    * Set the proper PianoKeys instance to be used by the service for DOM manipulation
    * @param pianoKeys 
    */
-  setPianoKeys(pianoKeys: PianoKeys.Keyboard): void {
+  setPianoKeys(pianoKeys: VirtualKeyboardComponent): void {
     this.pianoKeys = pianoKeys;
   }
 
