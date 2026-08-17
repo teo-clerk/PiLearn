@@ -14,6 +14,8 @@ import { Router } from '@angular/router';
 import type { HandMode } from '../../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../../core/score/score-document.service';
 import { AlignmentCursorService } from '../../services/alignment-cursor.service';
+import { PracticeAudioService } from '../../services/practice-audio.service';
+import { PracticeMidiService } from '../../services/practice-midi.service';
 import { PracticeSessionService } from '../../services/practice-session.service';
 import { PracticeHeaderComponent } from '../practice-header/practice-header.component';
 import {
@@ -51,6 +53,8 @@ export class PracticeSessionViewComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly scoreService = inject(ScoreDocumentService);
   private readonly cursor = inject(AlignmentCursorService);
+  private readonly audio = inject(PracticeAudioService);
+  private readonly midi = inject(PracticeMidiService);
   readonly session = inject(PracticeSessionService);
 
   /** Bound from the route: `/practice/:scoreId`. */
@@ -61,7 +65,7 @@ export class PracticeSessionViewComponent {
   readonly isBootstrapping = signal(true);
   readonly bootstrapError = signal<string | null>(null);
   readonly showSummary = signal(false);
-  readonly beatPulse = signal(0);
+  readonly beatPulse = this.audio.beatPulse;
 
   readonly document = this.scoreService.document;
   readonly requiresReview = this.scoreService.requiresReview;
@@ -81,8 +85,19 @@ export class PracticeSessionViewComponent {
     return this.cursor.expectedPitchesForHand(mode === 'RIGHT' ? 'RIGHT' : 'LEFT');
   });
 
-  /** Keys currently held, from WebMIDI. */
-  readonly activeNotes = signal<readonly number[]>([]);
+  /** Keys pressed on the on-screen keyboard (mouse/touch/keyboard). */
+  private readonly virtualNotes = signal<readonly number[]>([]);
+
+  /**
+   * Keys currently held — real MIDI input and on-screen presses merged.
+   *
+   * Both are legitimate ways to play, and the keyboard should light the same either
+   * way rather than privileging hardware.
+   */
+  readonly activeNotes = computed<readonly number[]>(() => {
+    const merged = new Set([...this.midi.heldNotes(), ...this.virtualNotes()]);
+    return [...merged];
+  });
 
   /**
    * Recently wrong notes.
@@ -113,6 +128,8 @@ export class PracticeSessionViewComponent {
     }
 
     this.destroyRef.onDestroy(() => {
+      this.audio.stop();
+      this.midi.stop();
       this.cursor.detach();
       this.scoreService.clear();
     });
@@ -132,6 +149,9 @@ export class PracticeSessionViewComponent {
       .subscribe({
         next: ({ roadmap, musicXml }) => {
           this.musicXml.set(musicXml);
+          // Fetching several MB of soundfont on the first Play would stall it; warm
+          // it while the learner is still reading the plan.
+          void this.audio.prepare();
           if (roadmap) {
             this.session.loadRoadmap(roadmap);
           } else {
@@ -156,6 +176,8 @@ export class PracticeSessionViewComponent {
   start(): void {
     this.showSummary.set(false);
     this.session.startAttempt();
+    this.midi.start();
+    void this.audio.startChunk(() => this.onChunkComplete());
   }
 
   /**
@@ -166,15 +188,32 @@ export class PracticeSessionViewComponent {
    */
   stop(): void {
     if (!this.session.isPlaying()) return;
+    this.audio.stop();
+    this.midi.stop();
+    this.session.finishAttempt(this.expectedNoteCountForChunk());
+    this.showSummary.set(true);
+  }
+
+  /**
+   * The chunk played to its end.
+   *
+   * Only reached when looping is off — `PracticeAudioService` restarts silently while
+   * loop is enabled, because firing the summary on every pass would make looping
+   * unusable as a drill.
+   */
+  private onChunkComplete(): void {
+    if (!this.session.isPlaying()) return;
+    this.midi.stop();
     this.session.finishAttempt(this.expectedNoteCountForChunk());
     this.showSummary.set(true);
   }
 
   restartChunk(): void {
+    this.audio.stop();
     const chunk = this.session.currentChunk();
     if (chunk) this.cursor.jumpToMeasure(chunk.startMeasure);
     this.showSummary.set(false);
-    this.session.startAttempt();
+    this.start();
   }
 
   toggleLoop(): void {
@@ -235,15 +274,17 @@ export class PracticeSessionViewComponent {
   // ── Keyboard interaction ───────────────────────────────────────────────────
 
   onVirtualKeyDown(event: { midi: number }): void {
-    this.activeNotes.update((notes) =>
+    this.virtualNotes.update((notes) =>
       notes.includes(event.midi) ? notes : [...notes, event.midi],
     );
     if (this.session.isPlaying()) {
+      // No expected-onset argument: an on-screen click has no meaningful timing to
+      // score, so it counts for pitch and is left out of the timing statistics.
       this.session.recordNote(event.midi, performance.now(), null);
     }
   }
 
   onVirtualKeyUp(event: { midi: number }): void {
-    this.activeNotes.update((notes) => notes.filter((midi) => midi !== event.midi));
+    this.virtualNotes.update((notes) => notes.filter((midi) => midi !== event.midi));
   }
 }
