@@ -1,4 +1,3 @@
-import type { Stave, StaveNote } from "vexflow";
 import type { Note } from '@tonejs/midi/dist/Note';
 import type * as Midi from '@tonejs/midi';
 import type { ReducedFraction } from "./reduced-fraction";
@@ -15,17 +14,6 @@ export interface UserPerformance {
   tooLateCount: number;
   perfectNoteCount: number;
   goodNoteCount: number;
-}
-
-export interface StaveAndStaveNotesPair {
-  xPositionsBass: number[];
-  xPositionsTreble: number[];
-  staveNotesTreble: StaveNote[];
-  staveNotesBass: StaveNote[];
-  staveTreble: Stave;
-  staveBass: Stave;
-  midiNotesTreble: Array<Note[]>;
-  midiNotesBass: Array<Note[]>;
 }
 
 export interface DurationDetection {
@@ -45,7 +33,6 @@ export interface PlayConfiguration {
   tempoFactor: number;  
   scoreRange: [number, number];
   isLoop: boolean;
-  staveAndStaveNotesPair: StaveAndStaveNotesPair[];
   accompaniment: Midi.Midi | null;
   midi: Midi.Midi | null;
   useMetronome: boolean;

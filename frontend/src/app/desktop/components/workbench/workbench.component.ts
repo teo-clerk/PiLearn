@@ -122,7 +122,6 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     tempoFactor: 1,
     scoreRange: [1, 100],
     isLoop: false,
-    staveAndStaveNotesPair: [],
     accompaniment: null,
     midi: null,
     useMetronome: false
