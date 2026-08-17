@@ -163,6 +163,30 @@ export interface AlignmentIndex {
   mean_confidence: number;
 }
 
+/**
+ * A pedagogical practice unit — what a learner works on in one sitting.
+ *
+ * Distinct from `Segment`: a segment is a musical phrase, a chunk is a practice window.
+ * They derive from the same analysis but are not 1:1 — a long phrase splits into several
+ * chunks, and a hard bar becomes a chunk of its own inside a phrase.
+ */
+export interface Chunk {
+  id: string;
+  ordinal: number;
+  /** Inclusive, notation index. */
+  start_measure: number;
+  /** Inclusive, notation index. */
+  end_measure: number;
+  measure_count: number;
+  /** 0..10, mean of the member measures. */
+  difficulty: number;
+  kind: 'PRIMARY' | 'MICRO' | 'JOIN' | 'REVIEW';
+  label: string;
+  boundary_reason: string;
+  segment_ids: string[];
+  patterns: TechnicalPattern[];
+}
+
 export interface Segment {
   id: string;
   start_measure: number;
@@ -243,7 +267,10 @@ export interface ScoreDocument {
   /** Measure indices in performance order, repeats and voltas unrolled. */
   playback_order: number[];
   alignment: AlignmentIndex;
+  /** Musical phrases — where the music breathes. */
   segments: Segment[];
+  /** Pedagogical practice units, consumed by the roadmap. */
+  chunks: Chunk[];
   harmony: unknown[];
   difficulty: DifficultySummary | null;
   confidence: ConfidenceReport;

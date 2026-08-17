@@ -21,6 +21,8 @@ export const routes: Routes = [
         // The stage-driven practice surface. No LayoutComponent wrapper: the surface
         // is full-viewport and owns its own chrome, the way the legacy /workbench route
         // did. `scoreId` binds straight to the component input via withComponentInputBinding.
+        // `/practice/demo` resolves through the same component; ScoreDocumentService
+        // recognises the id and serves the bundled demo score from assets.
         path: 'practice/:scoreId',
         loadComponent: () =>
             import('./practice/components/practice-session-view/practice-session-view.component')

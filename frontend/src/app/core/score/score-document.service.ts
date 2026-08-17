@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { type Observable, catchError, forkJoin, map, of, shareReplay, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { DemoScoreService } from './demo-score.service';
 import type {
   AlignmentIndex,
   Measure,
@@ -36,6 +37,7 @@ export interface ScoreLoadState {
 @Injectable({ providedIn: 'root' })
 export class ScoreDocumentService {
   private readonly http = inject(HttpClient);
+  private readonly demo = inject(DemoScoreService);
   private readonly baseUrl = environment.api;
 
   private readonly documentCache = new Map<string, Observable<ScoreDocument>>();
@@ -183,6 +185,16 @@ export class ScoreDocumentService {
     revision?: number,
   ): Observable<PracticeBundle> {
     this.state.update((current) => ({ ...current, loading: true, error: null }));
+
+    // `/practice/demo` serves a prebuilt score from assets so the surface can be
+    // exercised with no backend, database or OMR pipeline running.
+    if (DemoScoreService.isDemo(scoreId)) {
+      return this.demo.load().pipe(
+        tap(({ document, roadmap }) => {
+          this.state.set({ loading: false, error: null, document, roadmap });
+        }),
+      );
+    }
 
     return forkJoin({
       document: this.getDocument(scoreId, revision),
