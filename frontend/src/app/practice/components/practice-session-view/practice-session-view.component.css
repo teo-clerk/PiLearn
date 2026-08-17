@@ -109,3 +109,10 @@
   .review-banner { background: #3a2e10; color: #fcd34d; border-bottom-color: #57430f; }
   .review-banner--warn { background: #16233a; color: #93c5fd; border-bottom-color: #1e3a5f; }
 }
+
+.guide__volume input[type='range'] { width: 72px; accent-color: var(--pv-accent); }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}

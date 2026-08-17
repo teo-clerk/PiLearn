@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import * as Tone from 'tone';
 import { PlayerAudioService } from '../../desktop/service/player-audio.service';
+import type { Hand } from '../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../core/score/score-document.service';
 import { AlignmentCursorService } from './alignment-cursor.service';
 import { PracticeSessionService } from './practice-session.service';
@@ -34,10 +35,23 @@ export class PracticeAudioService {
   private readonly cursor = inject(AlignmentCursorService);
   private readonly scoreDocument = inject(ScoreDocumentService);
 
+  /**
+   * Play the opposing hand during hands-separate stages.
+   *
+   * On by default: hearing the other hand is the point of hands-separate practice —
+   * it keeps the learner in the harmonic and rhythmic context instead of drilling a
+   * line in isolation.
+   */
+  private readonly guideTrackState = signal(true);
+  /** 0..1. Below the learner's own notes so theirs stay audible on top. */
+  private readonly guideVolumeState = signal(0.55);
+
   private readonly beatState = signal<BeatEvent | null>(null);
   private readonly isReadyState = signal(false);
   private readonly isCountingInState = signal(false);
 
+  readonly guideTrackEnabled = this.guideTrackState.asReadonly();
+  readonly guideVolume = this.guideVolumeState.asReadonly();
   readonly beat = this.beatState.asReadonly();
   readonly isReady = this.isReadyState.asReadonly();
   readonly isCountingIn = this.isCountingInState.asReadonly();
@@ -58,6 +72,7 @@ export class PracticeAudioService {
 
   private metronomeTimer: ReturnType<typeof setInterval> | null = null;
   private beatCounter = 0;
+  private guideNoteCount = 0;
   private onChunkEnd: (() => void) | null = null;
 
   /**
@@ -113,11 +128,39 @@ export class PracticeAudioService {
       this.audio.schedule(() => this.cursor.syncToTick(step.start_tick), at);
     }
 
+    this.scheduleGuideTrack(chunk, chunkStartSec, countInSec, scale);
     this.startMetronome(bpm, countInSec);
     this.audio.scheduleEnd(countInSec + chunkEndSec, () => this.handleChunkEnd());
 
     this.cursor.jumpToMeasure(chunk.startMeasure);
     await this.audio.start();
+  }
+
+  setGuideTrackEnabled(enabled: boolean): void {
+    this.guideTrackState.set(enabled);
+    // Silence anything already sounding, or a held chord rings on after the toggle.
+    if (!enabled) this.audio.stopAllGuideNotes();
+  }
+
+  setGuideVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
+    this.guideVolumeState.set(clamped);
+    this.audio.setGuideVolume(clamped);
+  }
+
+  /**
+   * Which hand the engine plays for the learner, or null for none.
+   *
+   * Hands-separate stages get the OPPOSING hand. A both-hands stage gets nothing
+   * unless the guide track is explicitly enabled — playing the whole piece back over
+   * a performance attempt would make the learner's own errors inaudible.
+   */
+  private guideHand(): Hand | null {
+    if (!this.guideTrackState()) return null;
+    const mode = this.session.handMode();
+    if (mode === 'RIGHT') return 'LEFT';
+    if (mode === 'LEFT') return 'RIGHT';
+    return null;
   }
 
   pause(): void {
@@ -196,6 +239,53 @@ export class PracticeAudioService {
   }
 
   /**
+   * Schedule the opposing hand across the chunk.
+   *
+   * Note-on and note-off are scheduled as separate transport events rather than a
+   * note-on plus a `setTimeout`: a timeout keeps running when the transport pauses,
+   * which leaves the note sounding indefinitely.
+   */
+  private scheduleGuideTrack(
+    chunk: { startMeasure: number; endMeasure: number },
+    chunkStartSec: number,
+    countInSec: number,
+    scale: number,
+  ): void {
+    const hand = this.guideHand();
+    if (hand === null) return;
+
+    this.audio.setGuideInstrument(0);
+    this.audio.setGuideVolume(this.guideVolumeState());
+
+    const measures = this.scoreDocument.measures();
+    let scheduled = 0;
+
+    for (const measure of measures) {
+      if (measure.index < chunk.startMeasure || measure.index > chunk.endMeasure) continue;
+
+      for (const voice of measure.voices) {
+        for (const note of voice.notes) {
+          if (note.hand !== hand) continue;
+
+          const onAt = countInSec + (note.start_sec - chunkStartSec) * scale;
+          const offAt = onAt + note.duration_sec * scale;
+          if (onAt < 0) continue;
+
+          // Grace notes carry a nominal duration from the parser; keep them short so
+          // they read as ornaments rather than sustained notes.
+          const velocity = note.is_grace ? 48 : 64;
+
+          this.audio.schedule(() => this.audio.playGuideNote(note.midi, velocity), onAt);
+          this.audio.schedule(() => this.audio.stopGuideNote(note.midi), offAt);
+          scheduled += 1;
+        }
+      }
+    }
+
+    this.guideNoteCount = scheduled;
+  }
+
+  /**
    * Emit beats for the metronome indicator, and click when enabled.
    *
    * Uses an interval rather than Tone's scheduler because this drives a UI pulse, not
@@ -255,6 +345,10 @@ export class PracticeAudioService {
   }
 
   private stopInternal(): void {
+    // Before anything else: notes scheduled before a loop jump have their note-offs
+    // scheduled after it. Without this flush a held chord rings through the restart
+    // and stacks on every pass until the synth runs out of voices.
+    this.audio.stopAllGuideNotes();
     this.stopMetronome();
     this.beatCounter = 0;
     this.audio.clearSchedule();

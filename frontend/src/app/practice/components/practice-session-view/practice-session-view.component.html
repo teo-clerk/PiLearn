@@ -51,12 +51,18 @@
 
       <div class="transport__group transport__group--main">
         @if (!isPlaying()) {
-          <button type="button" class="btn btn--primary" (click)="start()">Play</button>
+          <button type="button" class="btn btn--primary" (click)="start()" title="Play (Space)">
+            Play
+          </button>
         } @else {
-          <button type="button" class="btn btn--primary" (click)="stop()">Stop</button>
+          <button type="button" class="btn btn--primary" (click)="stop()" title="Stop (Space)">
+            {{ isCountingIn() ? 'Counting in…' : 'Stop' }}
+          </button>
         }
 
-        <button type="button" class="btn" (click)="restartChunk()">Restart chunk</button>
+        <button type="button" class="btn" (click)="restartChunk()" title="Restart chunk (R)">
+          Restart chunk
+        </button>
 
         <button
           type="button"
@@ -64,9 +70,42 @@
           [class.btn--on]="loopEnabled()"
           [attr.aria-pressed]="loopEnabled()"
           (click)="toggleLoop()"
+          title="Loop the chunk (L)"
         >
           Loop
         </button>
+      </div>
+
+      <!-- Guide track: the opposing hand, during hands-separate stages -->
+      <div class="transport__group guide" role="group" aria-label="Guide track">
+        <button
+          type="button"
+          class="btn btn--toggle"
+          [class.btn--on]="guideTrackEnabled() && guideAvailable()"
+          [attr.aria-pressed]="guideTrackEnabled()"
+          [disabled]="!guideAvailable()"
+          [title]="guideAvailable()
+            ? 'Play the other hand along with you (G)'
+            : 'Available in hands-separate stages'"
+          (click)="toggleGuideTrack()"
+        >
+          Guide
+        </button>
+
+        @if (guideAvailable() && guideTrackEnabled()) {
+          <label class="guide__volume">
+            <span class="visually-hidden">Guide volume</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              [value]="guideVolumePercent()"
+              (input)="onGuideVolumeInput($event)"
+              aria-label="Guide track volume"
+            />
+          </label>
+        }
       </div>
 
       <div class="transport__group" role="group" aria-label="Hands">

@@ -10,6 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import type { HandMode } from '../../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../../core/score/score-document.service';
@@ -120,6 +121,21 @@ export class PracticeSessionViewComponent {
 
   readonly handModes: readonly HandMode[] = ['LEFT', 'BOTH', 'RIGHT'];
 
+  readonly guideTrackEnabled = this.audio.guideTrackEnabled;
+  readonly guideVolume = this.audio.guideVolume;
+  readonly isCountingIn = this.audio.isCountingIn;
+
+  /**
+   * Whether a guide track is meaningful right now.
+   *
+   * Only hands-separate stages have an opposing hand to play, so the control is
+   * disabled rather than hidden in both-hands stages — a control that vanishes is
+   * harder to learn than one that greys out.
+   */
+  readonly guideAvailable = computed(() => this.session.handMode() !== 'BOTH');
+
+  readonly guideVolumePercent = computed(() => Math.round(this.guideVolume() * 100));
+
   constructor() {
     // Load once the route input is available. Bootstrapping in the constructor rather
     // than ngOnInit keeps it out of the SSR path.
@@ -214,6 +230,54 @@ export class PracticeSessionViewComponent {
     if (chunk) this.cursor.jumpToMeasure(chunk.startMeasure);
     this.showSummary.set(false);
     this.start();
+  }
+
+  toggleGuideTrack(): void {
+    this.audio.setGuideTrackEnabled(!this.guideTrackEnabled());
+  }
+
+  onGuideVolumeInput(event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value)) this.audio.setGuideVolume(value / 100);
+  }
+
+  /**
+   * Transport keyboard shortcuts.
+   *
+   * Ignored while a text field has focus, so typing a search term does not restart
+   * the chunk. Space is intercepted to stop the page scrolling under the surface.
+   */
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if (this.isBootstrapping() || this.showSummary()) return;
+
+    const target = event.target as HTMLElement | null;
+    const tag = target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+    switch (event.code) {
+      case 'Space':
+        event.preventDefault();
+        this.isPlaying() ? this.stop() : this.start();
+        break;
+      case 'KeyR':
+        event.preventDefault();
+        this.restartChunk();
+        break;
+      case 'KeyL':
+        event.preventDefault();
+        this.toggleLoop();
+        break;
+      case 'KeyG':
+        if (this.guideAvailable()) {
+          event.preventDefault();
+          this.toggleGuideTrack();
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   toggleLoop(): void {

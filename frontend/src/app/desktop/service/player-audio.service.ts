@@ -208,6 +208,7 @@ export class PlayerAudioService implements OnDestroy {
    * Arrête et réinitialise le transport
    */
   stop(): void {
+    this.stopAllGuideNotes();
     const transport = Tone.getTransport();
     const draw = Tone.getDraw();
     transport.stop();
@@ -379,6 +380,52 @@ export class PlayerAudioService implements OnDestroy {
     }
   }
 
+
+  // ── Guide-track channel ────────────────────────────────────────────────────
+  // A dedicated MIDI channel for accompaniment, so the guide can be balanced and
+  // silenced independently of the learner's own playback (channel 0) and the
+  // metronome (channel 9, GM percussion).
+  static readonly GUIDE_CHANNEL = 1;
+
+  private guideActiveNotes = new Set<number>();
+
+  /** Sound one guide note immediately. Called from a transport callback. */
+  playGuideNote(midi: number, velocity = 64): void {
+    const channel = PlayerAudioService.GUIDE_CHANNEL;
+    this.spessasynth?.noteOn(channel, midi, Math.max(1, Math.min(127, Math.round(velocity))));
+    this.guideActiveNotes.add(midi);
+  }
+
+  /** Release one guide note. */
+  stopGuideNote(midi: number): void {
+    this.spessasynth?.noteOff(PlayerAudioService.GUIDE_CHANNEL, midi);
+    this.guideActiveNotes.delete(midi);
+  }
+
+  /**
+   * Release every sounding guide note.
+   *
+   * Essential at a loop boundary: notes scheduled before the jump have note-offs
+   * scheduled after it, so without an explicit flush a held chord rings through the
+   * restart and accumulates on every pass.
+   */
+  stopAllGuideNotes(): void {
+    for (const midi of this.guideActiveNotes) {
+      this.spessasynth?.noteOff(PlayerAudioService.GUIDE_CHANNEL, midi);
+    }
+    this.guideActiveNotes.clear();
+  }
+
+  /** Guide channel volume, 0..1. Uses CC7 (channel volume). */
+  setGuideVolume(volume: number): void {
+    const value = Math.max(0, Math.min(127, Math.round(volume * 127)));
+    this.spessasynth?.controllerChange(PlayerAudioService.GUIDE_CHANNEL, 7, value);
+  }
+
+  /** Instrument for the guide channel. 0 = Acoustic Grand Piano. */
+  setGuideInstrument(program = 0): void {
+    this.spessasynth?.programChange(PlayerAudioService.GUIDE_CHANNEL, program);
+  }
 
   playMetronomeClick(isStrong: boolean, velocity: number=43): void {
     const note = isStrong ? 34 : 33;   // 34 = Metronome Bell, 33 = Metronome Click
