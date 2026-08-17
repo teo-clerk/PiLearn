@@ -141,8 +141,10 @@ DEV_DEPS_TO_DROP=("@types/lodash")
 # Re-verify zero usage at execution time rather than trusting the audit.
 for dep in "${DEPS_TO_DROP[@]}" "${DEV_DEPS_TO_DROP[@]}"; do
   [[ "$dep" == "@types/"* ]] && continue
+  # `|| true`: grep exits 1 when there are no matches, which is the SUCCESS case here.
+  # Without it, `set -e` + `pipefail` kills the script exactly when the check passes.
   hits="$(grep -rl "from '$dep'\|from \"$dep\"\|from '$dep/" \
-            --include='*.ts' --include='*.html' frontend/src 2>/dev/null | wc -l)"
+            --include='*.ts' --include='*.html' frontend/src 2>/dev/null | wc -l || true)"
   if [[ "$hits" -gt 0 ]]; then
     grep -rn "from '$dep'\|from \"$dep\"\|from '$dep/" --include='*.ts' frontend/src | head -5
     fail "$dep still has $hits import site(s) — audit is stale, stopping."
