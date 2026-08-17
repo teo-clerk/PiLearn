@@ -58,6 +58,10 @@ CHUNK_SIZE_NUMERATOR = 12.0     # target = clamp(12 / mean_difficulty, 2, 8)
 HARD_MEASURE_RATIO = 2.0        # isolate a bar this many times the chunk mean
 BOUNDARY_TOLERANCE = 2          # measures either side of target to snap to a phrase end
 
+# Boundaries strong enough to end a chunk even mid-window: the phrase is unambiguously
+# over, so continuing would make the chunk span two phrases.
+STRONG_BOUNDARIES = frozenset({"REST", "DOUBLE_BARLINE", "REPEAT"})
+
 
 class TechnicalPattern(str, Enum):
     SCALE_RUN = "SCALE_RUN"
@@ -440,6 +444,17 @@ def build_chunks(
                 distance = abs(candidate - ideal_end)
                 if distance < best_distance:
                     chosen_end, reason, best_distance = candidate, boundaries[measure_index], distance
+
+        # A strong boundary strictly INSIDE the window ends the chunk there, even when
+        # it sits outside the snap tolerance. A bar of rest or a double barline means the
+        # phrase is over; carrying on to hit a target chunk size would span two phrases,
+        # which is the one thing chunking must never do.
+        for candidate in range(start, min(chosen_end, len(ordered) - 1)):
+            measure_index = ordered[candidate].index
+            boundary = boundaries.get(measure_index)
+            if boundary in STRONG_BOUNDARIES and candidate - start + 1 >= MIN_CHUNK_MEASURES:
+                chosen_end, reason = candidate, boundary
+                break
 
         window = ordered[start : chosen_end + 1]
         window_scores = [

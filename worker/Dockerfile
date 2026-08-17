@@ -99,7 +99,7 @@ COPY --chown=appuser:appuser worker/pyproject.toml /home/appuser/worker/pyprojec
 RUN /home/appuser/shared-venv/bin/pip install --no-cache-dir \
         "fastapi==0.118.0" "uvicorn[standard]==0.37.0" "python-multipart==0.0.20" \
         "pydantic==2.12.4" "pydantic-settings==2.7.1" "redis==5.2.1" \
-        "music21==9.1.0" "mido==1.3.3" "pypdf==5.1.0" \
+        "music21==10.5.0" "mido==1.3.3" "pypdf==5.1.0" \
         "boto3==1.35.92" "botocore==1.35.92" "httpx==0.28.1" \
         "structlog==24.4.0" "tenacity==9.0.0"
 

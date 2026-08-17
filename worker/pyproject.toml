@@ -28,7 +28,7 @@ dependencies = [
     "redis==5.2.1",
 
     # ── Music / notation ─────────────────────────────────────────────────────
-    "music21==9.1.0",                # parsing, key analysis, chordify, cadences
+    "music21==10.5.0",               # parsing, key analysis, chordify, cadences
     "mido==1.3.3",                   # MIDI read/write
     "pypdf==5.1.0",                  # authoritative source page count
 
