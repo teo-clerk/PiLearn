@@ -7,7 +7,6 @@ import { MidiServiceService } from '../../../shared/services/midi-service.servic
   standalone: true,
   imports: [],
   templateUrl: './midi-setup.component.html',
-  styleUrl: './midi-setup.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MidiSetupComponent implements OnChanges, OnDestroy {

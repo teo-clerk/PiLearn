@@ -1,5 +1,5 @@
 /* @import "nouislider/dist/nouislider.css"; */
-@import "tailwindcss";
+@reference "tailwindcss";
 
 /* Remove scrollbars from the entire page */
 html,
