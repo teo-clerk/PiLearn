@@ -195,6 +195,24 @@ scoring disabled.
 `localhost` counts as secure; a LAN IP such as `192.168.x.x` does not, and the prompt
 will be silently skipped.
 
+### 6.2b Non-MIDI input
+
+No hardware is the common case, not an edge case.
+
+- [ ] With no device connected, the input selector shows **MIDI keyboard — No device
+      detected** (greyed, not hidden) and **Click / touch** is active.
+- [ ] Click a key: it sounds and lights. Click during an attempt: it is scored for pitch.
+- [ ] **Drag across several keys**: each sounds in turn (glissando), and releasing
+      *outside* the keyboard leaves no key stuck lit.
+- [ ] Switch to **Computer keyboard**: `[A] [W] [S] [E] [D]…` labels appear on the keys.
+- [ ] `A S D F G H J K` plays C D E F G A B C; `W E T Y U` plays the sharps.
+- [ ] **Hold a key down**: it sounds ONCE. OS key-repeat must not register dozens of
+      notes — if accuracy collapses while holding a key, the repeat guard regressed.
+- [ ] `Z` / `X` shift the octave; the key labels follow, and held notes release rather
+      than stranding.
+- [ ] Focus the tempo slider and press `A`: no note sounds.
+- [ ] Plug in a MIDI keyboard mid-session: the selector switches to MIDI automatically.
+
 ### 6.3 Transport shortcuts
 
 Shortcuts are ignored while a text field has focus, and while the summary overlay is
@@ -206,6 +224,10 @@ open.
 | `R` | Restart chunk |
 | `L` | Toggle loop |
 | `G` | Toggle guide track (hands-separate stages only) |
+| `Z` / `X` | Octave down / up (computer-keyboard mode) |
+
+In computer-keyboard mode the piano mapping takes precedence, but `R`, `L` and `G` are
+deliberately excluded from it so the transport shortcuts always work.
 
 - [ ] `Space` starts and stops, and does **not** scroll the page.
 - [ ] Focus the tempo slider, press `Space` — the transport must **not** toggle.

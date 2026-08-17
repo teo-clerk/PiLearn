@@ -209,6 +209,7 @@ export class PlayerAudioService implements OnDestroy {
    */
   stop(): void {
     this.stopAllGuideNotes();
+    this.stopAllLearnerNotes();
     const transport = Tone.getTransport();
     const draw = Tone.getDraw();
     transport.stop();
@@ -386,6 +387,40 @@ export class PlayerAudioService implements OnDestroy {
   // silenced independently of the learner's own playback (channel 0) and the
   // metronome (channel 9, GM percussion).
   static readonly GUIDE_CHANNEL = 1;
+
+  /**
+   * Channel for notes the learner plays themselves.
+   *
+   * Separate from the guide (1) and the metronome (9) so all three can be balanced
+   * independently — and so a guide flush at a loop boundary never cuts a note the
+   * learner is still holding.
+   */
+  static readonly LEARNER_CHANNEL = 0;
+
+  private learnerActiveNotes = new Set<number>();
+
+  /** Sound a note the learner just played. Polyphonic — no implicit note-off. */
+  playLearnerNote(midi: number, velocity = 88): void {
+    this.spessasynth?.noteOn(
+      PlayerAudioService.LEARNER_CHANNEL,
+      midi,
+      Math.max(1, Math.min(127, Math.round(velocity))),
+    );
+    this.learnerActiveNotes.add(midi);
+  }
+
+  stopLearnerNote(midi: number): void {
+    this.spessasynth?.noteOff(PlayerAudioService.LEARNER_CHANNEL, midi);
+    this.learnerActiveNotes.delete(midi);
+  }
+
+  stopAllLearnerNotes(): void {
+    for (const midi of this.learnerActiveNotes) {
+      this.spessasynth?.noteOff(PlayerAudioService.LEARNER_CHANNEL, midi);
+    }
+    this.learnerActiveNotes.clear();
+  }
+
 
   private guideActiveNotes = new Set<number>();
 

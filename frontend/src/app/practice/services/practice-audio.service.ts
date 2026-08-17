@@ -136,6 +136,23 @@ export class PracticeAudioService {
     await this.audio.start();
   }
 
+  /**
+   * Sound a note the learner played, on any input.
+   *
+   * Called from every input path (MIDI, QWERTY, on-screen) so the instrument responds
+   * identically however it is played. Without this the on-screen keyboard is silent,
+   * which reads as broken rather than as "no audio for clicks".
+   */
+  playLearnerNote(midi: number, velocity = 88): void {
+    if (!this.isReadyState()) return;
+    this.audio.playLearnerNote(midi, velocity);
+  }
+
+  stopLearnerNote(midi: number): void {
+    if (!this.isReadyState()) return;
+    this.audio.stopLearnerNote(midi);
+  }
+
   setGuideTrackEnabled(enabled: boolean): void {
     this.guideTrackState.set(enabled);
     // Silence anything already sounding, or a held chord rings on after the toggle.

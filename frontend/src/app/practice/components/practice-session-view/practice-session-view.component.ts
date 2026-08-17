@@ -5,6 +5,7 @@ import {
   DestroyRef,
   PLATFORM_ID,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -16,6 +17,7 @@ import type { HandMode } from '../../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../../core/score/score-document.service';
 import { AlignmentCursorService } from '../../services/alignment-cursor.service';
 import { PracticeAudioService } from '../../services/practice-audio.service';
+import { PracticeQwertyService } from '../../services/practice-qwerty.service';
 import { PracticeMidiService } from '../../services/practice-midi.service';
 import { PracticeSessionService } from '../../services/practice-session.service';
 import { PracticeHeaderComponent } from '../practice-header/practice-header.component';
@@ -24,6 +26,12 @@ import {
   ScoreViewerComponent,
 } from '../score-viewer/score-viewer.component';
 import { AttemptSummaryComponent } from '../attempt-summary/attempt-summary.component';
+import {
+  type InputSource,
+  InputSourceSelectorComponent,
+} from '../input-source-selector/input-source-selector.component';
+import { type HudNote, NoteHudComponent } from '../note-hud/note-hud.component';
+import { StageGuideComponent } from '../stage-guide/stage-guide.component';
 import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.component';
 
 /**
@@ -44,6 +52,9 @@ import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.c
     ScoreViewerComponent,
     VirtualKeyboardComponent,
     AttemptSummaryComponent,
+    InputSourceSelectorComponent,
+    StageGuideComponent,
+    NoteHudComponent,
   ],
   templateUrl: './practice-session-view.component.html',
   styleUrl: './practice-session-view.component.css',
@@ -56,6 +67,7 @@ export class PracticeSessionViewComponent {
   private readonly cursor = inject(AlignmentCursorService);
   private readonly audio = inject(PracticeAudioService);
   private readonly midi = inject(PracticeMidiService);
+  private readonly qwerty = inject(PracticeQwertyService);
   readonly session = inject(PracticeSessionService);
 
   /** Bound from the route: `/practice/:scoreId`. */
@@ -96,7 +108,11 @@ export class PracticeSessionViewComponent {
    * way rather than privileging hardware.
    */
   readonly activeNotes = computed<readonly number[]>(() => {
-    const merged = new Set([...this.midi.heldNotes(), ...this.virtualNotes()]);
+    const merged = new Set([
+      ...this.midi.heldNotes(),
+      ...this.qwerty.heldNotes(),
+      ...this.virtualNotes(),
+    ]);
     return [...merged];
   });
 
@@ -121,6 +137,55 @@ export class PracticeSessionViewComponent {
 
   readonly handModes: readonly HandMode[] = ['LEFT', 'BOTH', 'RIGHT'];
 
+  /**
+   * Active input mode.
+   *
+   * Defaults to TOUCH so a first-time visitor with no hardware can play immediately;
+   * it upgrades to MIDI automatically once a device appears.
+   */
+  readonly inputSource = signal<InputSource>('TOUCH');
+
+  readonly midiSupported = signal(
+    typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator,
+  );
+  readonly midiAvailable = this.midi.hasDevice;
+  readonly qwertyOctave = this.qwerty.octave;
+
+  readonly showKeyHints = computed(() => this.inputSource() === 'QWERTY');
+  readonly keyHints = computed(() =>
+    this.showKeyHints() ? this.qwerty.keyLabels() : new Map<number, string>(),
+  );
+
+  /** Phases the learner has dismissed the explainer for, this session. */
+  private readonly dismissedGuides = signal<ReadonlySet<string>>(new Set());
+  readonly stagePhase = this.session.stagePhase;
+  readonly showStageGuide = computed(
+    () => !this.dismissedGuides().has(this.stagePhase()),
+  );
+
+  readonly runsRemaining = computed(() => {
+    const criterion = this.session.criterion();
+    if (!criterion) return 0;
+    return Math.max(0, criterion.consecutiveCleanRuns - this.session.consecutivePasses());
+  });
+
+  /** Notes the cursor expects next, for the HUD. */
+  readonly hudNotes = computed<HudNote[]>(() => {
+    const step = this.cursor.currentStep();
+    if (!step) return [];
+
+    const ppq = this.document()?.meta.ppq ?? 480;
+    const durationBeats = ppq > 0 ? step.duration_ticks / ppq : 1;
+    const mode = this.session.handMode();
+
+    return step.pitches
+      .filter((_, i) => mode === 'BOTH' || step.hands[i] === mode)
+      .map((midi) => ({ midi, durationBeats }));
+  });
+
+  readonly lastVerdict = computed(() => this.midi.lastEvent()?.verdict ?? null);
+  readonly lastDeviationMs = computed(() => this.midi.lastEvent()?.deviationMs ?? 0);
+
   readonly guideTrackEnabled = this.audio.guideTrackEnabled;
   readonly guideVolume = this.audio.guideVolume;
   readonly isCountingIn = this.audio.isCountingIn;
@@ -143,7 +208,16 @@ export class PracticeSessionViewComponent {
       queueMicrotask(() => this.bootstrap());
     }
 
+    // Prefer real hardware the moment it is available — someone who plugs in a
+    // keyboard should not have to find a setting.
+    effect(() => {
+      if (this.midi.hasDevice() && this.inputSource() === 'TOUCH') {
+        this.inputSource.set('MIDI');
+      }
+    });
+
     this.destroyRef.onDestroy(() => {
+      this.qwerty.disable();
       this.audio.stop();
       this.midi.stop();
       this.cursor.detach();
@@ -232,6 +306,31 @@ export class PracticeSessionViewComponent {
     this.start();
   }
 
+  selectInputSource(source: InputSource): void {
+    this.inputSource.set(source);
+    if (source === 'QWERTY') {
+      this.qwerty.enable();
+    } else {
+      this.qwerty.disable();
+    }
+  }
+
+  shiftOctave(delta: number): void {
+    this.qwerty.shiftOctave(delta);
+  }
+
+  dismissStageGuide(phase: string): void {
+    this.dismissedGuides.update((set) => new Set([...set, phase]));
+  }
+
+  /** A drag that ended off the keyboard — clear every on-screen held note. */
+  onVirtualReleaseAll(): void {
+    for (const midi of this.virtualNotes()) {
+      this.audio.stopLearnerNote(midi);
+    }
+    this.virtualNotes.set([]);
+  }
+
   toggleGuideTrack(): void {
     this.audio.setGuideTrackEnabled(!this.guideTrackEnabled());
   }
@@ -256,6 +355,14 @@ export class PracticeSessionViewComponent {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
+    // QWERTY piano gets first refusal. Its map deliberately excludes R, L and G so the
+    // two never contend for the same keystroke, but letting it decide keeps that
+    // contract in one place rather than duplicated here.
+    if (this.qwerty.handleKeyDown(event)) {
+      event.preventDefault();
+      return;
+    }
+
     switch (event.code) {
       case 'Space':
         event.preventDefault();
@@ -278,6 +385,11 @@ export class PracticeSessionViewComponent {
       default:
         break;
     }
+  }
+
+  @HostListener('document:keyup', ['$event'])
+  onKeyup(event: KeyboardEvent): void {
+    this.qwerty.handleKeyUp(event);
   }
 
   toggleLoop(): void {
@@ -338,9 +450,12 @@ export class PracticeSessionViewComponent {
   // ── Keyboard interaction ───────────────────────────────────────────────────
 
   onVirtualKeyDown(event: { midi: number }): void {
-    this.virtualNotes.update((notes) =>
-      notes.includes(event.midi) ? notes : [...notes, event.midi],
-    );
+    // Already sounding? A glissando re-enters keys; re-triggering would stutter.
+    if (this.virtualNotes().includes(event.midi)) return;
+
+    this.virtualNotes.update((notes) => [...notes, event.midi]);
+    this.audio.playLearnerNote(event.midi);
+
     if (this.session.isPlaying()) {
       // No expected-onset argument: an on-screen click has no meaningful timing to
       // score, so it counts for pitch and is left out of the timing statistics.
@@ -350,5 +465,6 @@ export class PracticeSessionViewComponent {
 
   onVirtualKeyUp(event: { midi: number }): void {
     this.virtualNotes.update((notes) => notes.filter((midi) => midi !== event.midi));
+    this.audio.stopLearnerNote(event.midi);
   }
 }

@@ -83,12 +83,16 @@ export class PracticeMidiService {
   private handle(midi: number, type: 'down' | 'up', eventTimeMs: number): void {
     if (type === 'up') {
       this.heldState.update((notes) => notes.filter((note) => note !== midi));
+      this.audio.stopLearnerNote(midi);
       return;
     }
 
     this.heldState.update((notes) =>
       notes.includes(midi) ? notes : [...notes, midi],
     );
+    // Sound it regardless of whether an attempt is running: a keyboard that stays
+    // silent outside a take feels broken.
+    this.audio.playLearnerNote(midi);
 
     if (!this.session.isPlaying()) {
       // Free play outside an attempt: light the key, score nothing.

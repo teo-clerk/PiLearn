@@ -47,7 +47,15 @@
   min-height: 0;
 }
 
+.hud-anchor {
+  position: absolute;
+  top: 0.6rem;
+  right: 1rem;
+  z-index: 3;
+}
+
 .stage__score {
+  position: relative;   /* anchors the floating HUD */
   min-height: 0;             /* lets the inner scroll container actually scroll */
   background: var(--pv-surface);
   border-bottom: 1px solid var(--pv-border);

@@ -7,6 +7,14 @@
   } @else {
     <app-practice-header [beatPulse]="beatPulse()" />
 
+    @if (showStageGuide()) {
+      <app-stage-guide
+        [phase]="stagePhase()"
+        [runsRemaining]="runsRemaining()"
+        (dismiss)="dismissStageGuide($event)"
+      />
+    }
+
     <!-- A roadmap built on a score with dropped pages teaches the wrong bars. This is
          surfaced at the top of the surface, not buried in a detail panel. -->
     @if (requiresReview()) {
@@ -22,6 +30,13 @@
 
     <main class="stage">
       <section class="stage__score" aria-label="Sheet music">
+        <div class="hud-anchor">
+          <app-note-hud
+            [targetNotes]="hudNotes()"
+            [lastVerdict]="lastVerdict()"
+            [lastDeviationMs]="lastDeviationMs()"
+          />
+        </div>
         <app-score-viewer
           [musicXml]="musicXml()"
           [alignmentIndex]="alignmentIndex()"
@@ -35,8 +50,11 @@
           [expectedNotes]="expectedNotes()"
           [errorNotes]="errorNotes()"
           [keyHeight]="110"
+          [keyHints]="keyHints()"
+          [showKeyHints]="showKeyHints()"
           (keyDown)="onVirtualKeyDown($event)"
           (keyUp)="onVirtualKeyUp($event)"
+          (releaseAll)="onVirtualReleaseAll()"
         />
       </section>
     </main>
@@ -47,6 +65,16 @@
         <button type="button" class="btn btn--ghost" (click)="backToLibrary()">
           Library
         </button>
+
+        <app-input-source-selector
+          [active]="inputSource()"
+          [midiAvailable]="midiAvailable()"
+          [midiSupported]="midiSupported()"
+          [octave]="qwertyOctave()"
+          (select)="selectInputSource($event)"
+          (octaveUp)="shiftOctave(1)"
+          (octaveDown)="shiftOctave(-1)"
+        />
       </div>
 
       <div class="transport__group transport__group--main">

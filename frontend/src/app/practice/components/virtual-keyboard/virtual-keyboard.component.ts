@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  HostListener,
   computed,
   input,
   output,
@@ -61,13 +62,28 @@ export interface KeyPressEvent {
           [attr.aria-label]="labelFor(key)"
           [attr.aria-pressed]="stateFor(key.midi) === 'active'"
           (pointerdown)="onPointerDown($event, key)"
+          (pointerenter)="onPointerEnter(key)"
           (pointerup)="onPointerUp(key)"
-          (pointerleave)="onPointerUp(key)"
+          (pointercancel)="onPointerUp(key)"
           (keydown.enter)="onPointerDown($event, key)"
           (keydown.space)="onPointerDown($event, key)"
           (keyup.enter)="onPointerUp(key)"
           (keyup.space)="onPointerUp(key)"
         />
+      }
+
+      <!-- QWERTY hint labels. Rendered after the keys so they paint on top;
+           pointer-events are off so they never swallow a press. -->
+      @if (showKeyHints()) {
+        @for (key of layout().keys; track key.midi) {
+          @if (keyHints().get(key.midi); as hint) {
+            <text
+              [attr.x]="key.x + key.width / 2"
+              [attr.y]="key.height - (key.isBlack ? 6 : 8)"
+              [attr.class]="key.isBlack ? 'hint hint--black' : 'hint hint--white'"
+            >{{ hint }}</text>
+          }
+        }
       }
     </svg>
   `,
@@ -128,6 +144,17 @@ export interface KeyPressEvent {
         stroke-width: 2;
       }
 
+      .hint {
+        font-size: 7px;
+        font-weight: 600;
+        text-anchor: middle;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .hint--white { fill: #8a8f98; }
+      .hint--black { fill: #cfd4dc; }
+
       @media (prefers-reduced-motion: reduce) {
         .key {
           transition: none;
@@ -152,8 +179,14 @@ export class VirtualKeyboardComponent {
   /** Whether clicking or keyboard-focusing a key emits events. */
   readonly interactive = input<boolean>(true);
 
+  /** MIDI note -> QWERTY key label, shown on the keys in computer-keyboard mode. */
+  readonly keyHints = input<ReadonlyMap<number, string>>(new Map());
+  readonly showKeyHints = input<boolean>(false);
+
   readonly keyDown = output<KeyPressEvent>();
   readonly keyUp = output<KeyPressEvent>();
+  /** Emitted when a drag ends off-keyboard; the host should clear every held note. */
+  readonly releaseAll = output<void>();
 
   /**
    * Imperative colour overrides, for the legacy `PlayerKeyboardService` facade.
@@ -163,6 +196,15 @@ export class VirtualKeyboardComponent {
    * of the player services.
    */
   private readonly overrides = signal<ReadonlyMap<number, string>>(new Map());
+
+  /**
+   * Whether a pointer is currently down anywhere on the keyboard.
+   *
+   * Enables glissando: dragging across keys should sound each one in turn. Tracked on
+   * the component rather than per-key because `pointerenter` fires on the key being
+   * entered, which has no idea a drag is in progress.
+   */
+  private pointerIsDown = false;
 
   private readonly activeSet = computed(() => new Set(this.activeMidiNotes()));
   private readonly expectedSet = computed(() => new Set(this.expectedNotes()));
@@ -214,12 +256,37 @@ export class VirtualKeyboardComponent {
   onPointerDown(event: Event, key: KeyLayout): void {
     if (!this.interactive()) return;
     event.preventDefault();
+
+    // No pointer capture: capturing would route every subsequent pointerenter to the
+    // origin key and defeat glissando. Releases outside the keyboard are handled by
+    // the window-level pointerup below.
+    this.pointerIsDown = true;
+    this.keyDown.emit({ midi: key.midi, name: key.name });
+  }
+
+  /** Glissando: entering a key with the pointer held sounds it. */
+  onPointerEnter(key: KeyLayout): void {
+    if (!this.interactive() || !this.pointerIsDown) return;
     this.keyDown.emit({ midi: key.midi, name: key.name });
   }
 
   onPointerUp(key: KeyLayout): void {
     if (!this.interactive()) return;
+    this.pointerIsDown = false;
     this.keyUp.emit({ midi: key.midi, name: key.name });
+  }
+
+  /**
+   * Release everything when the pointer is lifted anywhere.
+   *
+   * A drag frequently ends off the keyboard entirely; without a window-level release
+   * the last key stays lit and sounding.
+   */
+  @HostListener('window:pointerup')
+  onWindowPointerUp(): void {
+    if (!this.pointerIsDown) return;
+    this.pointerIsDown = false;
+    this.releaseAll.emit();
   }
 
   // ── Imperative facade (pianokeys compatibility) ────────────────────────────
