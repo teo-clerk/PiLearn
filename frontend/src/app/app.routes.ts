@@ -18,6 +18,16 @@ export const routes: Routes = [
         data: { breadcrumb: 'Workbench' }
     },
     {
+        // The stage-driven practice surface. No LayoutComponent wrapper: the surface
+        // is full-viewport and owns its own chrome, the way the legacy /workbench route
+        // did. `scoreId` binds straight to the component input via withComponentInputBinding.
+        path: 'practice/:scoreId',
+        loadComponent: () =>
+            import('./practice/components/practice-session-view/practice-session-view.component')
+                .then(m => m.PracticeSessionViewComponent),
+        data: { breadcrumb: 'Practice' }
+    },
+    {
         component: LayoutComponent,
         path: 'score',
         data: { breadcrumb: 'Score' },

@@ -12,6 +12,8 @@ import type {
 export interface PracticeBundle {
   document: ScoreDocument;
   index: AlignmentIndex;
+  /** Engraving source for OSMD. */
+  musicXml: string;
   /** Null when roadmap generation failed — the score is still playable. */
   roadmap: Roadmap | null;
 }
@@ -38,6 +40,7 @@ export class ScoreDocumentService {
 
   private readonly documentCache = new Map<string, Observable<ScoreDocument>>();
   private readonly indexCache = new Map<string, Observable<AlignmentIndex>>();
+  private readonly musicXmlCache = new Map<string, Observable<string>>();
 
   private readonly state = signal<ScoreLoadState>({
     loading: false,
@@ -122,6 +125,33 @@ export class ScoreDocumentService {
     return request;
   }
 
+  /**
+   * Fetch the engraving source.
+   *
+   * The ScoreDocument carries structure and alignment but NOT the MusicXML — that is a
+   * separate derived artefact, because OSMD needs the raw document and shipping it
+   * inside the JSON would double the payload for every consumer that only wants the
+   * alignment index.
+   */
+  getMusicXml(scoreId: string, revision?: number): Observable<string> {
+    const key = this.cacheKey(scoreId, revision);
+    const cached = this.musicXmlCache.get(key);
+    if (cached) return cached;
+
+    const request = this.http
+      .get(`${this.baseUrl}/api/v1/scores/${scoreId}/musicxml`, {
+        responseType: 'text',
+        params: revision === undefined ? {} : { revision: String(revision) },
+      })
+      .pipe(
+        shareReplay({ bufferSize: 1, refCount: false }),
+        catchError((error) => this.rethrow(error, `score ${scoreId} musicxml`)),
+      );
+
+    this.musicXmlCache.set(key, request);
+    return request;
+  }
+
   getRoadmap(
     scoreId: string,
     options: { revision?: number; goalTempoPct?: number; handsSeparateFirst?: boolean } = {},
@@ -157,6 +187,7 @@ export class ScoreDocumentService {
     return forkJoin({
       document: this.getDocument(scoreId, revision),
       index: this.getAlignmentIndex(scoreId, revision),
+      musicXml: this.getMusicXml(scoreId, revision),
       roadmap: this.getRoadmap(scoreId, { revision }).pipe(
         catchError(() => of(null)),
       ),
@@ -191,6 +222,9 @@ export class ScoreDocumentService {
     }
     for (const key of [...this.indexCache.keys()]) {
       if (key.startsWith(`${scoreId}@`)) this.indexCache.delete(key);
+    }
+    for (const key of [...this.musicXmlCache.keys()]) {
+      if (key.startsWith(`${scoreId}@`)) this.musicXmlCache.delete(key);
     }
   }
 

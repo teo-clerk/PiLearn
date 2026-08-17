@@ -1,0 +1,135 @@
+:host {
+  display: block;
+  --pl-surface: #ffffff;
+  --pl-border: #e2e5ea;
+  --pl-text: #1c2024;
+  --pl-muted: #6b7280;
+  --pl-accent: #2563eb;
+  --pl-good: #16a34a;
+  --pl-fair: #d97706;
+  --pl-poor: #dc2626;
+}
+
+.practice-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--pl-surface);
+  border-bottom: 1px solid var(--pl-border);
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.title { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--pl-text); }
+.subtitle { margin: 0; font-size: 0.8rem; color: var(--pl-muted); }
+
+.progress { display: flex; align-items: center; gap: 0.5rem; min-width: 160px; }
+.progress-track {
+  flex: 1; height: 6px; border-radius: 3px; background: var(--pl-border); overflow: hidden;
+}
+.progress-fill { height: 100%; background: var(--pl-accent); transition: width 200ms ease-out; }
+.progress-text { font-size: 0.75rem; color: var(--pl-muted); font-variant-numeric: tabular-nums; }
+
+/* ── Phase tabs ─────────────────────────────────────────────────────────── */
+.phase-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+}
+
+.phase-tab {
+  display: flex; flex-direction: column; gap: 0.125rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.phase-tab:hover:not(:disabled) { background: #f5f7fa; }
+.phase-tab--active { border-color: var(--pl-accent); background: #eff4ff; }
+.phase-tab:disabled { opacity: 0.4; cursor: not-allowed; }
+.phase-tab__label { font-size: 0.8rem; font-weight: 600; color: var(--pl-text); }
+.phase-tab__hint { font-size: 0.7rem; color: var(--pl-muted); }
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+.stage-label { font-size: 0.85rem; font-weight: 500; color: var(--pl-text); }
+.controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+
+.control { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; }
+.control__label { color: var(--pl-muted); white-space: nowrap; }
+.control__value { color: var(--pl-text); font-variant-numeric: tabular-nums; min-width: 92px; }
+.control--tempo input[type='range'] { width: 110px; accent-color: var(--pl-accent); }
+
+.control--toggle {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--pl-border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--pl-muted);
+}
+.control--on { border-color: var(--pl-accent); color: var(--pl-accent); background: #eff4ff; }
+
+.pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pl-border);
+  display: inline-block;
+}
+/* The attribute changes each beat; the animation restarts because the value differs. */
+.pulse--active { background: var(--pl-accent); animation: beat 140ms ease-out; }
+@keyframes beat { from { transform: scale(1.8); opacity: 1; } to { transform: scale(1); opacity: 0.6; } }
+
+.segmented { display: inline-flex; border: 1px solid var(--pl-border); border-radius: 6px; overflow: hidden; }
+.segmented__option {
+  padding: 0.3rem 0.5rem; border: 0; background: transparent;
+  font-size: 0.7rem; color: var(--pl-muted); cursor: pointer;
+}
+.segmented__option--active { background: var(--pl-accent); color: #fff; }
+
+/* ── Badges ─────────────────────────────────────────────────────────────── */
+.badges { display: flex; gap: 0.5rem; }
+.badge {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0.25rem 0.6rem; border-radius: 6px; background: #f5f7fa; min-width: 62px;
+}
+.badge__value { font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.badge__label { font-size: 0.62rem; color: var(--pl-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.badge--good .badge__value { color: var(--pl-good); }
+.badge--fair .badge__value { color: var(--pl-fair); }
+.badge--poor .badge__value { color: var(--pl-poor); }
+.badge--rushing .badge__value { color: var(--pl-fair); }
+.badge--dragging .badge__value { color: var(--pl-fair); }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .phase-tabs { grid-template-columns: repeat(2, 1fr); }
+  .phase-tab__hint { display: none; }
+  .controls { gap: 0.6rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill, .pulse--active { transition: none; animation: none; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --pl-surface: #16181c;
+    --pl-border: #2c3038;
+    --pl-text: #e8eaed;
+    --pl-muted: #9aa2ae;
+  }
+  .phase-tab:hover:not(:disabled) { background: #1e2127; }
+  .phase-tab--active { background: #1a2438; }
+  .badge { background: #1e2127; }
+  .control--on { background: #1a2438; }
+}

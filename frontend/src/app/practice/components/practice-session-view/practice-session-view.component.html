@@ -1,0 +1,154 @@
+<div class="practice-view">
+  @if (isBootstrapping()) {
+    <div class="state state--loading" role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading your practice plan…</p>
+    </div>
+  } @else {
+    <app-practice-header [beatPulse]="beatPulse()" />
+
+    <!-- A roadmap built on a score with dropped pages teaches the wrong bars. This is
+         surfaced at the top of the surface, not buried in a detail panel. -->
+    @if (requiresReview()) {
+      <div class="review-banner" role="alert">
+        <strong>This score needs review.</strong>
+        Some pages were not fully recognised, so bars may be missing or wrong.
+      </div>
+    }
+
+    @if (bootstrapError(); as message) {
+      <div class="review-banner review-banner--warn" role="status">{{ message }}</div>
+    }
+
+    <main class="stage">
+      <section class="stage__score" aria-label="Sheet music">
+        <app-score-viewer
+          [musicXml]="musicXml()"
+          [alignmentIndex]="alignmentIndex()"
+          [activeChunk]="activeChunk()"
+        />
+      </section>
+
+      <section class="stage__keyboard" aria-label="Keyboard">
+        <app-virtual-keyboard
+          [activeMidiNotes]="activeNotes()"
+          [expectedNotes]="expectedNotes()"
+          [errorNotes]="errorNotes()"
+          [keyHeight]="110"
+          (keyDown)="onVirtualKeyDown($event)"
+          (keyUp)="onVirtualKeyUp($event)"
+        />
+      </section>
+    </main>
+
+    <!-- Bottom transport bar -->
+    <footer class="transport" aria-label="Practice controls">
+      <div class="transport__group">
+        <button type="button" class="btn btn--ghost" (click)="backToLibrary()">
+          Library
+        </button>
+      </div>
+
+      <div class="transport__group transport__group--main">
+        @if (!isPlaying()) {
+          <button type="button" class="btn btn--primary" (click)="start()">Play</button>
+        } @else {
+          <button type="button" class="btn btn--primary" (click)="stop()">Stop</button>
+        }
+
+        <button type="button" class="btn" (click)="restartChunk()">Restart chunk</button>
+
+        <button
+          type="button"
+          class="btn btn--toggle"
+          [class.btn--on]="loopEnabled()"
+          [attr.aria-pressed]="loopEnabled()"
+          (click)="toggleLoop()"
+        >
+          Loop
+        </button>
+      </div>
+
+      <div class="transport__group" role="group" aria-label="Hands">
+        <div class="segmented">
+          @for (mode of handModes; track mode) {
+            <button
+              type="button"
+              class="segmented__option"
+              [class.segmented__option--active]="handMode() === mode"
+              [attr.aria-pressed]="handMode() === mode"
+              [disabled]="isPlaying()"
+              (click)="selectHandMode(mode)"
+            >
+              {{ mode === 'LEFT' ? 'Left' : mode === 'RIGHT' ? 'Right' : 'Both' }}
+            </button>
+          }
+        </div>
+      </div>
+    </footer>
+  }
+
+  <!-- Post-attempt summary -->
+  @if (showSummary() && lastResult(); as result) {
+    <div class="summary-backdrop" (click)="dismissSummary()">
+      <div
+        class="summary"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="summary-title"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 id="summary-title" class="summary__title">{{ summaryTitle() }}</h2>
+        <p class="summary__advice">{{ summaryAdvice() }}</p>
+
+        <dl class="summary__stats">
+          <div class="stat">
+            <dt>Accuracy</dt>
+            <dd>{{ accuracyPercent() }}%</dd>
+          </div>
+          <div class="stat">
+            <dt>Correct</dt>
+            <dd>{{ result.notesCorrect }} / {{ result.notesExpected }}</dd>
+          </div>
+          <div class="stat">
+            <dt>Wrong</dt>
+            <dd>{{ result.notesWrong }}</dd>
+          </div>
+          <div class="stat">
+            <dt>Missed</dt>
+            <dd>{{ result.notesMissed }}</dd>
+          </div>
+        </dl>
+
+        <p class="summary__timing">{{ timingSummary() }}</p>
+
+        @if (worstMeasures(result).length > 0) {
+          <div class="summary__weak">
+            <h3>Where it went wrong</h3>
+            <ul>
+              @for (item of worstMeasures(result); track item.measure) {
+                <li>
+                  <span class="weak__bar">Bar {{ item.measure }}</span>
+                  <span class="weak__count">{{ item.errors }} error{{ item.errors > 1 ? 's' : '' }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <div class="summary__actions">
+          <button type="button" class="btn" (click)="retryStage()">Try again</button>
+          @if (stageCleared()) {
+            <button type="button" class="btn btn--primary" (click)="advanceStage()">
+              Next stage
+            </button>
+          } @else {
+            <button type="button" class="btn btn--ghost" (click)="dismissSummary()">
+              Close
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

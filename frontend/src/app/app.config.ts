@@ -1,5 +1,5 @@
 import { type ApplicationConfig, inject, provideZoneChangeDetection, LOCALE_ID, PLATFORM_ID, provideEnvironmentInitializer } from '@angular/core';
-import { IsActiveMatchOptions, NavigationStart, isActive, provideRouter, Router, withInMemoryScrolling, withRouterConfig, withViewTransitions } from '@angular/router';
+import { IsActiveMatchOptions, NavigationStart, isActive, provideRouter, Router, withComponentInputBinding, withInMemoryScrolling, withRouterConfig, withViewTransitions } from '@angular/router';
 import { registerLocaleData, isPlatformBrowser } from '@angular/common';
 
 // Load common locales
@@ -40,6 +40,10 @@ export const appConfig: ApplicationConfig = {
     }, withCaching()),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes,
+      // Binds route params/data straight to component inputs. Without it,
+      // PracticeSessionViewComponent's required `scoreId` input never receives the
+      // :scoreId segment and the component throws on first read.
+      withComponentInputBinding(),
       withViewTransitions({
         onViewTransitionCreated: ({ transition }) => {
           const router = inject(Router);

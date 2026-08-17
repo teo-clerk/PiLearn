@@ -1,0 +1,128 @@
+<header class="practice-header">
+  <!-- Piece identity + overall progress -->
+  <div class="header-row header-row--identity">
+    <div class="identity">
+      <h1 class="title">{{ roadmap()?.title || 'Practice' }}</h1>
+      @if (roadmap(); as map) {
+        <p class="subtitle">{{ map.composer }}</p>
+      }
+    </div>
+
+    <div class="progress" role="group" aria-label="Overall roadmap progress">
+      <div class="progress-track">
+        <div class="progress-fill" [style.width.%]="stageProgress() * 100"></div>
+      </div>
+      <span class="progress-text">{{ progressPercent() }}%</span>
+    </div>
+  </div>
+
+  <!-- Phase tabs. A phase with no stages in this chunk is disabled, not hidden: the
+       progression should stay legible even when a step does not apply. -->
+  <nav class="phase-tabs" role="tablist" aria-label="Practice phase">
+    @for (tab of tabs; track tab.phase) {
+      <button
+        type="button"
+        role="tab"
+        class="phase-tab"
+        [class.phase-tab--active]="activePhase() === tab.phase"
+        [attr.aria-selected]="activePhase() === tab.phase"
+        [disabled]="!isPhaseAvailable(tab.phase)"
+        [attr.title]="tab.hint"
+        (click)="selectPhase(tab.phase)"
+      >
+        <span class="phase-tab__label">{{ tab.label }}</span>
+        <span class="phase-tab__hint">{{ tab.hint }}</span>
+      </button>
+    }
+  </nav>
+
+  <!-- Transport controls + live feedback -->
+  <div class="header-row header-row--controls">
+    <div class="stage-label" aria-live="polite">{{ stageLabel() }}</div>
+
+    <div class="controls">
+      <!-- Tempo -->
+      <label class="control control--tempo">
+        <span class="control__label">Tempo</span>
+        <input
+          type="range"
+          min="25"
+          max="150"
+          step="5"
+          [value]="tempoPercent()"
+          [disabled]="isPlaying()"
+          (input)="onTempoInput($event)"
+          aria-label="Tempo as a percentage of the printed tempo"
+        />
+        <span class="control__value">
+          {{ tempoPercent() }}% · {{ targetTempoBpm() }} bpm
+        </span>
+      </label>
+
+      <!-- Metronome. The pulse dot is keyed off beatPulse so it flashes with the
+           transport rather than on a timer of its own, which would drift. -->
+      <button
+        type="button"
+        class="control control--toggle"
+        [class.control--on]="metronomeEnabled()"
+        [attr.aria-pressed]="metronomeEnabled()"
+        (click)="toggleMetronome()"
+      >
+        <span
+          class="pulse"
+          [class.pulse--active]="metronomeEnabled()"
+          [attr.data-beat]="beatPulse()"
+        ></span>
+        Metronome
+      </button>
+
+      <!-- Count-in -->
+      <div class="control control--countin" role="group" aria-label="Count-in">
+        <span class="control__label">Count-in</span>
+        <div class="segmented">
+          @for (bars of countInOptions; track bars) {
+            <button
+              type="button"
+              class="segmented__option"
+              [class.segmented__option--active]="countInBars() === bars"
+              [attr.aria-pressed]="countInBars() === bars"
+              (click)="setCountIn(bars)"
+            >
+              {{ countInLabel(bars) }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Accuracy + timing -->
+      <div class="badges">
+        <div
+          class="badge badge--accuracy"
+          [class.badge--good]="accuracyBand() === 'good'"
+          [class.badge--fair]="accuracyBand() === 'fair'"
+          [class.badge--poor]="accuracyBand() === 'poor'"
+          aria-live="polite"
+        >
+          <span class="badge__value">{{ accuracyPercent() }}%</span>
+          <span class="badge__label">accuracy</span>
+        </div>
+
+        <div
+          class="badge badge--timing"
+          [class.badge--rushing]="isRushing()"
+          [class.badge--dragging]="isDragging()"
+        >
+          <span class="badge__value">{{ timingLabel() }}</span>
+          <span class="badge__label">timing</span>
+        </div>
+
+        @if (runsRemaining() > 0) {
+          <div class="badge badge--runs">
+            <span class="badge__value">{{ runsRemaining() }}</span>
+            <span class="badge__label">clean run{{ runsRemaining() > 1 ? 's' : '' }} to go</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</header>

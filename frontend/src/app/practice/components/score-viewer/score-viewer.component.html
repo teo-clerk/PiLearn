@@ -1,0 +1,19 @@
+<div class="score-viewer">
+  @if (isLoading()) {
+    <div class="overlay overlay--loading" role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <span>Rendering score…</span>
+    </div>
+  }
+
+  @if (error(); as message) {
+    <div class="overlay overlay--error" role="alert">
+      <strong>The score could not be displayed</strong>
+      <span class="overlay__detail">{{ message }}</span>
+    </div>
+  }
+
+  <div #scrollHost class="scroll-host">
+    <div #osmdHost class="osmd-host"></div>
+  </div>
+</div>

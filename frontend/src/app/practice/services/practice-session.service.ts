@@ -11,6 +11,12 @@ import type {
 } from '../../core/score/score-document.model';
 import { AlignmentCursorService } from './alignment-cursor.service';
 
+/** The four practice phases a learner navigates between. */
+export type StagePhase = 'HANDS_SEPARATE' | 'CHUNK_DRILL' | 'TEMPO_RAMP' | 'FULL_FLUENCY';
+
+/** Bars of count-in before an attempt starts. 0 disables it. */
+export type CountInBars = 0 | 1 | 2;
+
 /** How a played note related to what was expected. */
 export type NoteVerdict = 'CORRECT' | 'EARLY' | 'LATE' | 'WRONG' | 'MISSED';
 
@@ -151,6 +157,90 @@ export class PracticeSessionService {
 
   readonly isRushing = computed(() => this.rushBiasMs() < -60);
   readonly isDragging = computed(() => this.rushBiasMs() > 60);
+
+  // ── Transport preferences ──────────────────────────────────────────────────
+  private readonly metronomeState = signal(true);
+  private readonly countInBarsState = signal<CountInBars>(1);
+  private readonly loopState = signal(true);
+
+  readonly metronomeEnabled = this.metronomeState.asReadonly();
+  readonly countInBars = this.countInBarsState.asReadonly();
+  readonly loopEnabled = this.loopState.asReadonly();
+
+  /**
+   * Which of the four practice phases the current stage belongs to.
+   *
+   * The stage ladder is a flat list; the header groups it into phases a learner can
+   * reason about. Derived rather than stored so it cannot fall out of step with the
+   * ladder the roadmap actually generated.
+   */
+  readonly stagePhase = computed<StagePhase>(() => {
+    const resolved = this.currentStage();
+    if (!resolved) return 'HANDS_SEPARATE';
+
+    const { stage, chunk } = resolved;
+    if (stage.handMode !== 'BOTH') return 'HANDS_SEPARATE';
+    if (stage.mode === 'WAIT') return 'CHUNK_DRILL';
+
+    const target = Math.max(...chunk.stages.map((s) => s.tempoBpm));
+    return stage.tempoBpm >= target ? 'FULL_FLUENCY' : 'TEMPO_RAMP';
+  });
+
+  /** First stage index of each phase, for the header tabs. -1 when a phase is absent. */
+  readonly phaseEntryPoints = computed<Record<StagePhase, number>>(() => {
+    const entries: Record<StagePhase, number> = {
+      HANDS_SEPARATE: -1, CHUNK_DRILL: -1, TEMPO_RAMP: -1, FULL_FLUENCY: -1,
+    };
+    const chunk = this.currentChunk();
+    if (!chunk) return entries;
+
+    const stages = this.allStages();
+    const target = Math.max(...chunk.stages.map((s) => s.tempoBpm));
+
+    for (const resolved of stages) {
+      if (resolved.chunk.ordinal !== chunk.ordinal) continue;
+      const { stage } = resolved;
+      const phase: StagePhase =
+        stage.handMode !== 'BOTH' ? 'HANDS_SEPARATE'
+          : stage.mode === 'WAIT' ? 'CHUNK_DRILL'
+            : stage.tempoBpm >= target ? 'FULL_FLUENCY' : 'TEMPO_RAMP';
+      if (entries[phase] === -1) entries[phase] = resolved.globalIndex;
+    }
+    return entries;
+  });
+
+  /** Target tempo as a percentage of the piece's printed tempo, for the slider. */
+  readonly tempoPercent = computed(() => {
+    const roadmap = this.roadmapState();
+    if (!roadmap || roadmap.targetTempoBpm <= 0) return 100;
+    return Math.round((this.targetTempoBpm() / roadmap.targetTempoBpm) * 100);
+  });
+
+  setMetronome(enabled: boolean): void {
+    this.metronomeState.set(enabled);
+  }
+
+  setCountInBars(bars: CountInBars): void {
+    this.countInBarsState.set(bars);
+  }
+
+  setLoop(enabled: boolean): void {
+    this.loopState.set(enabled);
+  }
+
+  /** Set tempo as a percentage of the printed tempo. */
+  setTempoPercent(percent: number): void {
+    const roadmap = this.roadmapState();
+    if (!roadmap) return;
+    const clamped = Math.max(25, Math.min(150, percent));
+    this.overrideTempo((roadmap.targetTempoBpm * clamped) / 100);
+  }
+
+  /** Jump to the first stage of a phase. No-op when the phase has no stages. */
+  goToPhase(phase: StagePhase): void {
+    const index = this.phaseEntryPoints()[phase];
+    if (index >= 0) this.goToStage(index);
+  }
 
   // ── Session control ────────────────────────────────────────────────────────
 
