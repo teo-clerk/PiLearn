@@ -14,15 +14,13 @@ import { Router } from '@angular/router';
 import type { HandMode } from '../../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../../core/score/score-document.service';
 import { AlignmentCursorService } from '../../services/alignment-cursor.service';
-import {
-  type AttemptResult,
-  PracticeSessionService,
-} from '../../services/practice-session.service';
+import { PracticeSessionService } from '../../services/practice-session.service';
 import { PracticeHeaderComponent } from '../practice-header/practice-header.component';
 import {
   type ChunkRange,
   ScoreViewerComponent,
 } from '../score-viewer/score-viewer.component';
+import { AttemptSummaryComponent } from '../attempt-summary/attempt-summary.component';
 import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.component';
 
 /**
@@ -38,7 +36,12 @@ import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.c
   selector: 'app-practice-session-view',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PracticeHeaderComponent, ScoreViewerComponent, VirtualKeyboardComponent],
+  imports: [
+    PracticeHeaderComponent,
+    ScoreViewerComponent,
+    VirtualKeyboardComponent,
+    AttemptSummaryComponent,
+  ],
   templateUrl: './practice-session-view.component.html',
   styleUrl: './practice-session-view.component.css',
 })
@@ -101,56 +104,6 @@ export class PracticeSessionViewComponent {
   readonly handMode = this.session.handMode;
 
   readonly handModes: readonly HandMode[] = ['LEFT', 'BOTH', 'RIGHT'];
-
-  readonly summaryTitle = computed(() => {
-    const result = this.lastResult();
-    if (!result) return '';
-    return result.verdict === 'PASS'
-      ? 'Clean run'
-      : result.verdict === 'STEP_DOWN'
-        ? 'Let us slow down'
-        : 'Not quite yet';
-  });
-
-  /**
-   * What to tell the learner next.
-   *
-   * Mirrors the adaptation policy in PRODUCT_SPEC §5.3, so the message and the system's
-   * actual next move cannot disagree.
-   */
-  readonly summaryAdvice = computed(() => {
-    const result = this.lastResult();
-    if (!result) return '';
-
-    if (result.verdict === 'PASS') {
-      return this.stageCleared()
-        ? 'Stage complete — move on when you are ready.'
-        : 'One more clean run to clear this stage.';
-    }
-    if (result.verdict === 'STEP_DOWN') {
-      return 'Drop the tempo a step and rebuild it from there.';
-    }
-
-    const worst = [...result.measureResults]
-      .sort((a, b) => b.wrong + b.missed - (a.wrong + a.missed))
-      .find((m) => m.wrong + m.missed > 0);
-
-    return worst
-      ? `Bar ${worst.measureIndex + 1} is costing the most — try it on its own.`
-      : 'Run it again and keep the pulse steady.';
-  });
-
-  readonly accuracyPercent = computed(() =>
-    Math.round((this.lastResult()?.pitchAccuracy ?? 0) * 100),
-  );
-
-  readonly timingSummary = computed(() => {
-    const result = this.lastResult();
-    if (!result) return '';
-    const bias = result.rushBiasMs;
-    const direction = bias < -20 ? 'ahead of' : bias > 20 ? 'behind' : 'on';
-    return `${Math.abs(Math.round(bias))} ms ${direction} the beat (RMS ${result.timingRmsMs} ms)`;
-  });
 
   constructor() {
     // Load once the route input is available. Bootstrapping in the constructor rather
@@ -273,14 +226,6 @@ export class PracticeSessionViewComponent {
   retryStage(): void {
     this.showSummary.set(false);
     this.restartChunk();
-  }
-
-  worstMeasures(result: AttemptResult): { measure: number; errors: number }[] {
-    return result.measureResults
-      .map((m) => ({ measure: m.measureIndex + 1, errors: m.wrong + m.missed }))
-      .filter((m) => m.errors > 0)
-      .sort((a, b) => b.errors - a.errors)
-      .slice(0, 3);
   }
 
   backToLibrary(): void {

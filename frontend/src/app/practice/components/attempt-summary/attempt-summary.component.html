@@ -1,0 +1,54 @@
+<div class="backdrop" (click)="dismiss.emit()">
+  <div
+    class="summary"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="summary-title"
+    (click)="$event.stopPropagation()"
+  >
+    <h2 id="summary-title" class="summary__title">{{ title() }}</h2>
+    <p class="summary__advice">{{ advice() }}</p>
+
+    <dl class="stats">
+      <div class="stat">
+        <dt>Accuracy</dt><dd>{{ accuracyPercent() }}%</dd>
+      </div>
+      <div class="stat">
+        <dt>Correct</dt><dd>{{ result().notesCorrect }} / {{ result().notesExpected }}</dd>
+      </div>
+      <div class="stat">
+        <dt>Wrong</dt><dd>{{ result().notesWrong }}</dd>
+      </div>
+      <div class="stat">
+        <dt>Missed</dt><dd>{{ result().notesMissed }}</dd>
+      </div>
+    </dl>
+
+    <p class="timing">{{ timingSummary() }}</p>
+
+    @if (worstMeasures().length > 0) {
+      <h3 class="weak__heading">Where it went wrong</h3>
+      <ul class="weak">
+        @for (item of worstMeasures(); track item.measure) {
+          <li>
+            <span>Bar {{ item.measure }}</span>
+            <span class="weak__count">
+              {{ item.errors }} error{{ item.errors > 1 ? 's' : '' }}
+            </span>
+          </li>
+        }
+      </ul>
+    }
+
+    <div class="actions">
+      <button type="button" class="btn" (click)="retry.emit()">Try again</button>
+      @if (stageCleared()) {
+        <button type="button" class="btn btn--primary" (click)="advance.emit()">
+          Next stage
+        </button>
+      } @else {
+        <button type="button" class="btn btn--ghost" (click)="dismiss.emit()">Close</button>
+      }
+    </div>
+  </div>
+</div>

@@ -1,0 +1,48 @@
+:host {
+  --as-surface: #fff; --as-border: #e2e5ea; --as-text: #1c2024;
+  --as-muted: #6b7280; --as-accent: #2563eb;
+}
+
+.backdrop {
+  position: fixed; inset: 0; z-index: 50; padding: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  background: rgb(15 18 22 / 55%);
+}
+
+.summary {
+  width: min(30rem, 100%); max-height: 85vh; overflow-y: auto;
+  padding: 1.25rem; border-radius: 12px;
+  background: var(--as-surface); color: var(--as-text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 22%);
+}
+
+.summary__title { margin: 0 0 0.25rem; font-size: 1.15rem; }
+.summary__advice { margin: 0 0 1rem; color: var(--as-muted); font-size: 0.85rem; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 0 0 0.9rem; }
+.stat { display: flex; flex-direction: column; padding: 0.5rem; background: #f5f7fa; border-radius: 8px; }
+.stat dt { font-size: 0.62rem; color: var(--as-muted); text-transform: uppercase; }
+.stat dd { margin: 0; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.timing { margin: 0 0 0.9rem; font-size: 0.8rem; color: var(--as-muted); }
+
+.weak__heading { margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--as-muted); }
+.weak { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.weak li { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 0.3rem 0.5rem; background: #fef2f2; border-radius: 6px; }
+.weak__count { color: #b91c1c; font-variant-numeric: tabular-nums; }
+
+.actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.btn {
+  padding: 0.45rem 0.9rem; border: 1px solid var(--as-border); border-radius: 7px;
+  background: var(--as-surface); color: var(--as-text); font-size: 0.82rem; cursor: pointer;
+}
+.btn--primary { background: var(--as-accent); border-color: var(--as-accent); color: #fff; }
+.btn--ghost { border-color: transparent; color: var(--as-muted); }
+
+@media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+@media (prefers-color-scheme: dark) {
+  :host { --as-surface: #16181c; --as-border: #2c3038; --as-text: #e8eaed; --as-muted: #9aa2ae; }
+  .stat { background: #1e2127; }
+  .weak li { background: #2a1a1c; }
+}
