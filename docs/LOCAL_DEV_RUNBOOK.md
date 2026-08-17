@@ -24,7 +24,55 @@ build it unless you are actually working on ingestion.
 
 ---
 
-## 1. Backing services
+## 1. Fastest path: the demo score (no backend at all)
+
+To exercise the practice surface — audio, cursor, keyboard, stages — you need **nothing
+but the Angular dev server**:
+
+```bash
+cd frontend
+npm ci        # first run only
+npm start
+```
+
+Then open:
+
+```
+http://localhost:4200/practice/demo
+```
+
+This serves a prebuilt score from `src/assets/demo/`, produced by the real
+`document_builder`, so it is representative rather than a mock. It is shaped for testing:
+
+| Property | Why |
+|---|---|
+| 16 bars, two staves | Enough to exercise chunking without scrolling forever |
+| Full-bar rest at bar 8 | A phrase boundary → 2 segments, 4 chunks |
+| Accidentals only in bars 9–16 | Chunk difficulty differs, so start tempos differ |
+| Held chord in bar 16 | The loop-boundary note-off test (§7.5) |
+| 88 bpm target | Slow enough to play along with by hand |
+
+Regenerate it after a builder change:
+
+```bash
+cd worker
+python3 -c "
+from pathlib import Path
+from pilearn_worker.parser.musicxml_parser import parse_musicxml
+from pilearn_worker.parser.document_builder import build_document, BuildOptions
+raw = parse_musicxml(Path('../frontend/src/assets/demo/demo-score.musicxml'))
+doc = build_document(raw, BuildOptions(score_id='demo-0000-0000-0000-000000000001',
+                                       target_tempo_bpm=88.0))
+Path('../frontend/src/assets/demo/demo-document.json').write_text(doc.model_dump_json())
+print(f'{doc.meta.measure_count} bars, {len(doc.chunks)} chunks, {len(doc.alignment.steps)} steps')
+"
+```
+
+Everything below is only needed for the full stack (real scores, ingestion, persistence).
+
+---
+
+## 2. Backing services
 
 ```bash
 cd /path/to/PiLearn
@@ -55,7 +103,7 @@ curl -s localhost:8000/health | jq
 
 ---
 
-## 2. Backend
+## 3. Backend
 
 ```bash
 cd backend
@@ -74,7 +122,7 @@ failure is deliberate (see `PHASE0_SETUP.md` §2).
 
 ---
 
-## 3. Frontend
+## 4. Frontend
 
 ```bash
 cd frontend
@@ -87,12 +135,12 @@ npm start       # regenerates the API client, then serves on :4200
 
 ---
 
-## 4. Getting a score to practise
+## 5. Getting a score to practise
 
 The practice route needs a score that has a **`ScoreDocument`**, not just an uploaded
 file. Three ways to get one, cheapest first:
 
-### 4a. Build a document directly from MusicXML (no OMR, seconds)
+### 5a. Build a document directly from MusicXML (no OMR, seconds)
 
 Fastest path, and it exercises the same builder the pipeline uses:
 
@@ -114,7 +162,7 @@ PY
 Then POST it to the backend (see `ScoreDocumentService.save`), or load it through the
 worker's `/api/v1/scores/{id}/document` endpoint.
 
-### 4b. Full ingestion through the worker
+### 5b. Full ingestion through the worker
 
 ```bash
 curl -X POST localhost:8000/api/v1/omr/process \
@@ -130,7 +178,7 @@ curl -s localhost:8000/api/v1/omr/jobs/<jobId> | jq '{status, stage, progress, p
 Watch `pages`: `droppedPages` non-empty means bars are missing from the score, and the
 job lands in `REVIEW_REQUIRED` rather than `COMPLETED`. That is working as intended.
 
-### 4c. Existing library score
+### 5c. Existing library score
 
 Any score whose `processing_status` is `COMPLETED` or `REVIEW_REQUIRED`:
 
@@ -142,7 +190,7 @@ psql "$DB_URL" -c \
 
 ---
 
-## 5. Open the practice surface
+## 6. Open the practice surface
 
 ```
 http://localhost:4200/practice/<scoreId>
@@ -156,9 +204,25 @@ http://localhost:4200/practice/<scoreId>?revision=2
 
 ---
 
-## 6. Browser testing checklist
+## 7. Browser testing checklist
 
-### 6.1 AudioContext unlock
+### 7.0 Two-minute smoke test
+
+Run this first on `/practice/demo`. If any step fails, stop and fix it before working
+through the detailed sections.
+
+1. [ ] Route loads; the header shows **PiLearn Demo — Study in C** and four phase tabs.
+2. [ ] The stage guide banner explains **Hands separate**.
+3. [ ] The score renders; bars 1–4 are full opacity, bars 5–16 dimmed.
+4. [ ] Click a key on the on-screen piano → it **sounds** and lights.
+5. [ ] Press **Play** → count-in clicks, then the cursor advances in time with the audio.
+6. [ ] You hear the **left hand** playing (the guide) while the cursor tracks the right.
+7. [ ] Press **Space** → playback stops.
+8. [ ] Switch input to **Computer keyboard** → `[A] [W] [S]…` labels appear on the keys.
+9. [ ] Press `A` → C4 sounds.
+10. [ ] Let a chunk play to the end with Loop off → the attempt summary opens.
+
+### 7.1 AudioContext unlock
 
 Browsers refuse to start audio without a user gesture. The surface is built around this:
 the soundfont is fetched during bootstrap, but `Tone.start()` only runs inside the Play
@@ -174,7 +238,7 @@ click.
 The first Play should not stall. If it does, the soundfont did not warm during bootstrap
 — check the network tab for the `/assets/soundfonts/` request.
 
-### 6.2 WebMIDI
+### 7.2 WebMIDI
 
 WebMIDI is **Chromium-only**. Firefox and Safari get playback and cursor tracking with
 scoring disabled.
@@ -195,7 +259,7 @@ scoring disabled.
 `localhost` counts as secure; a LAN IP such as `192.168.x.x` does not, and the prompt
 will be silently skipped.
 
-### 6.2b Non-MIDI input
+### 7.3 Non-MIDI input
 
 No hardware is the common case, not an edge case.
 
@@ -213,7 +277,7 @@ No hardware is the common case, not an edge case.
 - [ ] Focus the tempo slider and press `A`: no note sounds.
 - [ ] Plug in a MIDI keyboard mid-session: the selector switches to MIDI automatically.
 
-### 6.3 Transport shortcuts
+### 7.4 Transport shortcuts
 
 Shortcuts are ignored while a text field has focus, and while the summary overlay is
 open.
@@ -234,7 +298,7 @@ deliberately excluded from it so the transport shortcuts always work.
 - [ ] `R` restarts from the chunk's first bar with the count-in.
 - [ ] `L` toggles the Loop button state.
 
-### 6.4 Guide track (hands-separate)
+### 7.5 Guide track (hands-separate)
 
 - [ ] Select a **Right hand** stage. The Guide button is enabled.
 - [ ] Press Play: you hear the **left** hand while the cursor tracks the right.
@@ -247,7 +311,7 @@ deliberately excluded from it so the transport shortcuts always work.
       the sound must not thicken with each pass. Accumulating voices means the note-off
       flush regressed.
 
-### 6.5 Cursor and chunk highlighting
+### 7.6 Cursor and chunk highlighting
 
 - [ ] Bars outside the active chunk are dimmed.
 - [ ] The cursor advances in time with the audio, not ahead of or behind it.
@@ -255,14 +319,14 @@ deliberately excluded from it so the transport shortcuts always work.
       every step.
 - [ ] Changing stage to a different chunk re-dims and scrolls to the new range.
 
-### 6.6 Attempt summary
+### 7.7 Attempt summary
 
 - [ ] With Loop **off**, play a chunk to the end: the summary opens automatically.
 - [ ] With Loop **on**: it must **not** open — it restarts silently instead.
 - [ ] The summary's weak-bar list matches where you actually played wrong notes.
 - [ ] "Next stage" appears only once the stage's clean-run requirement is met.
 
-### 6.7 Degraded paths
+### 7.8 Degraded paths
 
 - [ ] Open a score whose `processing_status` is `REVIEW_REQUIRED`: the amber "needs
       review" banner appears above the score.
@@ -272,7 +336,7 @@ deliberately excluded from it so the transport shortcuts always work.
 
 ---
 
-## 7. Verification commands
+## 8. Verification commands
 
 ```bash
 # Frontend
@@ -283,8 +347,43 @@ npx ng build --configuration=production --no-prerender   # expect: success
 # Worker
 cd ../worker && python3 -m pytest tests -q                # expect: 127 passed
 
-# Backend
+# Backend — see §8.1 for the Java 21 requirement
 cd ../backend && ./mvnw -B clean verify
+```
+
+### 8.1 Backend toolchain (Java 21)
+
+`pom.xml` targets **Java 21**. A newer JDK compiles but is not what CI runs, and Lombok
+breaks on JDK majors it has not shipped support for — which is the failure you will hit
+first on JDK 24/25.
+
+```bash
+# Install Java 21 (any distribution; temurin shown)
+mise use -g java@temurin-21.0.12+8.0.LTS
+java -version        # must report 21.x
+
+# One-off: create the Maven wrapper. No global Maven needed — mvnw bootstraps it.
+cd backend
+mkdir -p .mvn/wrapper
+BASE="https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.2/maven-wrapper-distribution/src/resources"
+curl -fsSL -o mvnw "$BASE/mvnw"
+curl -fsSL -o mvnw.cmd "$BASE/mvnw.cmd"
+chmod +x mvnw
+cat > .mvn/wrapper/maven-wrapper.properties <<'EOF'
+distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.9/apache-maven-3.9.9-bin.zip
+wrapperUrl=https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar
+EOF
+
+# Verify. First run downloads Maven and the whole dependency tree — several minutes.
+./mvnw -B clean verify
+```
+
+If your shell resolves a different JDK (a version manager's shims often win over
+`PATH`), pin it explicitly for the build:
+
+```bash
+JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.12+8.0.LTS" \
+  ./mvnw -B clean verify
 ```
 
 ### Known build warnings
@@ -303,7 +402,7 @@ the whole framework into the component's scoped styles.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -311,8 +410,8 @@ the whole framework into the component's scoped styles.
 | Practice route renders blank | Score has no `ScoreDocument` | Check `current_revision` is not null (§4c) |
 | Score area empty, no error | MusicXML fetch failed | Network tab: `/api/v1/scores/{id}/musicxml` |
 | Cursor does not move | No alignment index | `curl .../document \| jq '.alignment.steps \| length'` |
-| Audio silent, cursor moving | AudioContext suspended | §6.1 |
-| MIDI keys do nothing | Device not enabled, or non-Chromium | §6.2 |
-| Notes ring across a loop | Guide note-off flush regressed | §6.4 last item; see `stopAllGuideNotes` |
+| Audio silent, cursor moving | AudioContext suspended | §7.1 |
+| MIDI keys do nothing | Device not enabled, or non-Chromium | §7.2 |
+| Notes ring across a loop | Guide note-off flush regressed | §7.5 last item; see `stopAllGuideNotes` |
 | `npm install` fails on a git dep | A `github:` dependency crept back in | `grep -n 'github:' frontend/package.json` |
 | Liquibase checksum error | An applied changeset was edited | Never edit applied changesets. Locally: `docker compose down -v` |

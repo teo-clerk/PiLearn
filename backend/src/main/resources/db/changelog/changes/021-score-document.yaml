@@ -56,7 +56,10 @@ databaseChangeLog:
               - column: { name: revision, descending: true }
 
         # Partial index: the review queue is a small slice of a large table.
+        # PostgreSQL only — H2 (used by the test suite) has no partial-index syntax, and
+        # an unguarded raw statement here fails every @SpringBootTest context load.
         - sql:
+            dbms: postgresql
             comment: Index only documents that still need a human to look at them.
             sql: >
               CREATE INDEX idx_score_document_review

@@ -141,3 +141,8 @@ NOTES.md
 scratch/
 *.log
 !docs/**/*.md
+
+# Maven wrapper jar is fetched on first run; the scripts and properties are committed.
+!backend/mvnw
+!backend/mvnw.cmd
+!backend/.mvn/wrapper/maven-wrapper.properties

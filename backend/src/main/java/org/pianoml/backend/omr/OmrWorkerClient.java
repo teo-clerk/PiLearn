@@ -1,6 +1,7 @@
 package org.pianoml.backend.omr;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -48,6 +49,13 @@ public class OmrWorkerClient {
   private final RestClient restClient;
   private final String workerToken;
 
+  /**
+   * Marked explicitly because this class has two constructors (the second is for
+   * tests). With neither annotated, Spring stops looking for an injectable candidate
+   * and falls back to a no-arg constructor that does not exist, failing every
+   * @SpringBootTest context load with NoSuchMethodException.
+   */
+  @Autowired
   public OmrWorkerClient(
       @Value("${omr.worker.url:http://localhost:8000}") String baseUrl,
       @Value("${omr.worker.token:}") String workerToken,
