@@ -123,7 +123,7 @@ export class ScoreUploadService {
         }),
         switchMap((step) => {
           if (step.kind === 'progress') return of(step.value);
-          if (step.kind === 'accepted') return this.pollJob(step.value.jobId, step.value.scoreId);
+          if (step.kind === 'accepted') return this.pollStatus(step.value.scoreId);
           return of();
         }),
         catchError((error: unknown) => {
@@ -135,8 +135,15 @@ export class ScoreUploadService {
       );
   }
 
-  /** Poll the ingestion job until it terminates. */
-  private pollJob(jobId: string, scoreId: string): Observable<UploadProgress> {
+  /**
+   * Poll the backend until ingestion terminates.
+   *
+   * Deliberately `/api/v1/scores/{scoreId}/status` rather than the worker's own job
+   * endpoint: the worker stays private behind the API, and the status vocabulary
+   * (QUEUED / PROCESSING / READY / REVIEW_REQUIRED / FAILED) stays stable even when the
+   * pipeline's internal stages change.
+   */
+  private pollStatus(scoreId: string): Observable<UploadProgress> {
     return timer(0, ScoreUploadService.POLL_MS).pipe(
       switchMap((tick) => {
         if (tick > ScoreUploadService.MAX_POLLS) {
@@ -149,8 +156,8 @@ export class ScoreUploadService {
               ),
           );
         }
-        return this.http.get<JobStatusResponse>(
-          `${this.baseUrl}/api/v1/omr/jobs/${jobId}`,
+        return this.http.get<ScoreStatusResponse>(
+          `${this.baseUrl}/api/v1/scores/${scoreId}/status`,
         );
       }),
       map((status) => this.toProgress(status, scoreId)),
@@ -164,8 +171,8 @@ export class ScoreUploadService {
     );
   }
 
-  private toProgress(status: JobStatusResponse, scoreId: string): UploadProgress {
-    const dropped = status.pages?.droppedPages ?? [];
+  private toProgress(status: ScoreStatusResponse, scoreId: string): UploadProgress {
+    const dropped = status.droppedPages ?? [];
 
     if (status.status === 'FAILED') {
       throw new UploadFailedError(
@@ -175,7 +182,10 @@ export class ScoreUploadService {
       );
     }
 
-    if (status.status === 'COMPLETED' || status.status === 'REVIEW_REQUIRED') {
+    // READY and REVIEW_REQUIRED are both terminal and both navigable — a partially
+    // recognised score is still practisable, and the practice surface shows its own
+    // review banner. Refusing to open it would strand the learner on this screen.
+    if (status.status === 'READY' || status.status === 'REVIEW_REQUIRED') {
       return {
         stage: 'DONE',
         progress: 1,
@@ -212,6 +222,9 @@ export class ScoreUploadService {
         return 'ANALYSE';
       case 'ANALYSE':
         return 'PLAN';
+      case 'QUEUED':
+      case 'NONE':
+        return 'UPLOAD';
       default:
         return 'RECOGNISE';
     }
@@ -279,14 +292,20 @@ export class ScoreUploadService {
   }
 }
 
-interface JobStatusResponse {
-  status: string;
+/** Mirrors `ScoreStatusResponse` on the backend. */
+interface ScoreStatusResponse {
+  scoreId: string;
+  status: 'QUEUED' | 'PROCESSING' | 'READY' | 'REVIEW_REQUIRED' | 'FAILED';
   stage?: string;
   progress?: number;
   message?: string;
+  revision?: number | null;
+  sourcePages?: number | null;
+  recognisedPages?: number | null;
+  droppedPages?: number[];
+  warningCount?: number;
   errorCode?: string;
   errorDetail?: string;
-  pages?: { droppedPages?: number[] };
 }
 
 /**
