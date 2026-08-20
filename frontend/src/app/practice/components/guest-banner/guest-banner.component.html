@@ -1,0 +1,21 @@
+<div class="guest-banner" role="status">
+  <span class="guest-banner__icon" aria-hidden="true">♪</span>
+
+  <p class="guest-banner__text">
+    <strong>You're practising as a guest.</strong>
+    Save your practice progress by creating a free account — this score stays available
+    on this device either way.
+  </p>
+
+  <div class="guest-banner__actions">
+    <a class="guest-banner__cta" routerLink="/account/create">Create free account</a>
+    <button
+      type="button"
+      class="guest-banner__dismiss"
+      aria-label="Dismiss guest notice"
+      (click)="dismiss.emit()"
+    >
+      ✕
+    </button>
+  </div>
+</div>

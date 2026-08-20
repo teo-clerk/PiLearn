@@ -3,20 +3,17 @@ package org.pianoml.backend.ingestion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.pianoml.backend.entity.Score;
-import org.pianoml.backend.entity.User;
+import org.pianoml.backend.identity.OwnerScope;
+import org.pianoml.backend.identity.OwnerScopeResolver;
 import org.pianoml.backend.omr.OmrSubmission;
 import org.pianoml.backend.omr.OmrSubmitRequest;
 import org.pianoml.backend.omr.OmrWorkerClient;
 import org.pianoml.backend.repository.ScoreRepository;
-import org.pianoml.backend.service.AccountService;
 import org.pianoml.backend.storage.ScoreStorageException;
 import org.pianoml.backend.storage.ScoreStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,7 +44,8 @@ public class ScoreUploadController {
   private final ScoreIngestionService ingestionService;
   private final OmrWorkerClient workerClient;
   private final ScoreRepository scoreRepository;
-  private final AccountService accountService;
+  private final OwnerScopeResolver ownerResolver;
+  private final AuthorResolver authorResolver;
 
   /** 50 MB, matching the worker's own limit so a file cannot pass here and fail there. */
   static final long MAX_BYTES = 50L * 1024 * 1024;
@@ -65,13 +63,22 @@ public class ScoreUploadController {
   private static final Set<String> REJECTED_TYPE_PREFIXES =
       Set.of("image/", "video/", "audio/", "text/html");
 
+  /**
+   * Deliberately NOT {@code @Transactional}.
+   *
+   * <p>Two of the three steps here — writing to object storage and handing the job to
+   * the worker — are not transactional and cannot be rolled back. Wrapping the method
+   * only rolled back the third, so a worker outage discarded the score row while leaving
+   * the uploaded file orphaned in storage, and the "mark FAILED" write below never
+   * survived. Each write now commits on its own, which is what actually happens anyway.
+   */
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @Transactional
   public ResponseEntity<UploadAcceptedResponse> upload(
       @RequestPart("file") MultipartFile file,
       @RequestParam(value = "title", required = false) String title,
       @RequestParam(value = "composer", required = false) String composer,
-      @RequestParam(value = "makeFingering", defaultValue = "false") boolean makeFingering) {
+      @RequestParam(value = "makeFingering", defaultValue = "false") boolean makeFingering,
+      @RequestParam(value = "guestSessionId", required = false) String guestSessionId) {
 
     String extension = validate(file);
 
@@ -84,7 +91,7 @@ public class ScoreUploadController {
           HttpStatus.BAD_REQUEST, "The uploaded file could not be read.");
     }
 
-    User owner = currentUser();
+    OwnerScope owner = ownerResolver.resolve(guestSessionId);
     Score score = createScore(file, title, composer, owner);
 
     // Store the original BEFORE submitting. If the worker call fails we still hold the
@@ -134,7 +141,9 @@ public class ScoreUploadController {
         file.getOriginalFilename(), score.getId(), jobId, content.length);
 
     return ResponseEntity.accepted()
-        .body(UploadAcceptedResponse.queued(score.getId().toString(), jobId));
+        .body(new UploadAcceptedResponse(
+            score.getId().toString(), jobId, ScoreIngestionService.STATUS_QUEUED,
+            score.getGuestSessionId()));
   }
 
   /** @return the normalised file extension, including the dot. */
@@ -174,10 +183,15 @@ public class ScoreUploadController {
     return extension;
   }
 
-  private Score createScore(MultipartFile file, String title, String composer, User owner) {
+  private Score createScore(
+      MultipartFile file, String title, String composer, OwnerScope owner) {
     Score score = new Score();
     score.setTitle(resolveTitle(title, file.getOriginalFilename()));
-    score.setOwner(owner);
+    score.setOwner(owner.user());
+    score.setGuestSessionId(owner.guestSessionId());
+    // score.author_id is NOT NULL; an unnamed composer resolves to a shared
+    // "Unknown" author rather than failing the upload.
+    score.setAuthor(authorResolver.resolve(composer));
     score.setVersion(1);
     score.setHasFiles(false);
     score.setProcessingStatus(ScoreIngestionService.STATUS_QUEUED);
@@ -201,13 +215,4 @@ public class ScoreUploadController {
     return stem.isBlank() ? "Untitled score" : stem;
   }
 
-  private User currentUser() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    User user = authentication == null ? null : accountService.getUserFromAuthentication(authentication);
-    if (user == null) {
-      throw new ResponseStatusException(
-          HttpStatus.UNAUTHORIZED, "Sign in to upload sheet music.");
-    }
-    return user;
-  }
 }

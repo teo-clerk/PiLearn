@@ -98,12 +98,25 @@ export class PracticeAudioService {
     const chunk = this.session.currentChunk();
     if (!chunk) return;
 
+    // In WAIT mode there is no transport at all. The learner's own playing moves the
+    // cursor (see WaitGateService), so scheduling a clock here would drag it away from
+    // whatever note they are still hunting for — which is the exact opposite of what
+    // the mode promises.
+    if (this.session.practiceMode() === 'WAIT') {
+      await this.prepare();
+      this.stopInternal();
+      this.onChunkEnd = onEnd;
+      this.cursor.jumpToMeasure(chunk.startMeasure);
+      return;
+    }
+
     await this.prepare();
     this.stopInternal();
     this.onChunkEnd = onEnd;
 
     const bpm = this.session.targetTempoBpm();
     Tone.getTransport().bpm.value = bpm;
+    const isRhythmStage = this.session.practiceMode() === 'RHYTHM';
 
     const startStep = this.cursor.stepIndexForMeasure(chunk.startMeasure);
     const steps = this.cursor.stepsInRange(chunk.startMeasure, chunk.endMeasure);
@@ -128,7 +141,9 @@ export class PracticeAudioService {
       this.audio.schedule(() => this.cursor.syncToTick(step.start_tick), at);
     }
 
-    this.scheduleGuideTrack(chunk, chunkStartSec, countInSec, scale);
+    if (!isRhythmStage) {
+      this.scheduleGuideTrack(chunk, chunkStartSec, countInSec, scale);
+    }
     this.startMetronome(bpm, countInSec);
     this.audio.scheduleEnd(countInSec + chunkEndSec, () => this.handleChunkEnd());
 
@@ -173,8 +188,17 @@ export class PracticeAudioService {
    * a performance attempt would make the learner's own errors inaudible.
    */
   private guideHand(): Hand | null {
-    if (!this.guideTrackState()) return null;
     const mode = this.session.handMode();
+
+    // A stage built around accompaniment turns the guide on regardless of the learner's
+    // toggle: "Right hand with accompaniment" with the accompaniment silenced is not a
+    // quieter version of the exercise, it is a different one.
+    if (this.session.currentStage()?.stage.guideOpposingHand) {
+      if (mode === 'RIGHT') return 'LEFT';
+      if (mode === 'LEFT') return 'RIGHT';
+    }
+
+    if (!this.guideTrackState()) return null;
     if (mode === 'RIGHT') return 'LEFT';
     if (mode === 'LEFT') return 'RIGHT';
     return null;

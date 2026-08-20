@@ -52,11 +52,14 @@ RUN python -m venv /home/appuser/shared-venv \
 #    PINNED TO COMMIT SHAs. The legacy image cloned --depth=1 from default branches,
 #    so two builds a week apart produced different recognition and silently moved the
 #    golden baseline. Bump these deliberately, with a baseline re-run.
-ARG HOMR_SHA=main
-ARG RELIEUR_SHA=main
-ARG PIANOPLAYER_SHA=master
-ARG AUTOHARMONIZER_SHA=main
-ARG SYLLABUS_SHA=main
+# Resolved 2026-08-18. These were branch names, not SHAs, despite the note above —
+# so builds were never actually reproducible, and `relieur` failed outright because
+# its default branch is `master`, not `main`.
+ARG HOMR_SHA=2d0c0a66b6ebc9a8b3e3e61b3a6be4b0e1701d97
+ARG RELIEUR_SHA=6db59c4ea4aef11741cecec253a0622a2933a475
+ARG PIANOPLAYER_SHA=6fb0e2114d7b21f75c0be5208172e1243a57323e
+ARG AUTOHARMONIZER_SHA=3b3a72179f38e3d98ace1ca9a4682f8663bc90bd
+ARG SYLLABUS_SHA=e161954880f50e2ddc226bd066f855ec12424ded
 
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 RUN pipx install poetry

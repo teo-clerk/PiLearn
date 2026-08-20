@@ -12,6 +12,7 @@ import {
   throwError,
   timer,
 } from 'rxjs';
+import { GuestSessionService } from '../../core/session/guest-session.service';
 import { environment } from '../../../environments/environment';
 
 /** The four stages a learner sees while a score is ingested. */
@@ -82,6 +83,7 @@ const STAGE_PROGRESS: Record<UploadStage, number> = {
 @Injectable({ providedIn: 'root' })
 export class ScoreUploadService {
   private readonly http = inject(HttpClient);
+  private readonly guestSession = inject(GuestSessionService);
   private readonly baseUrl = environment.api;
 
   /** Poll interval while a real job runs. */
@@ -95,8 +97,16 @@ export class ScoreUploadService {
     form.append('title', title || file.name.replace(/\.[^.]+$/, ''));
     form.append('composer', composer || 'Unknown');
 
+    // Sent without a token when the visitor is not signed in. The backend attaches such
+    // an upload to a guest owner rather than refusing it — requiring an account before
+    // the learner has seen the product work is the wrong order.
+    const existingSession = this.guestSession.sessionId();
+    if (existingSession) {
+      form.append('guestSessionId', existingSession);
+    }
+
     return this.http
-      .post<{ jobId: string; scoreId: string }>(
+      .post<UploadAcceptedResponse>(
         `${this.baseUrl}/api/v1/scores/upload`,
         form,
         { reportProgress: true, observe: 'events' },
@@ -117,6 +127,9 @@ export class ScoreUploadService {
             };
           }
           if (event.type === HttpEventType.Response && event.body) {
+            // Remember the identity the backend issued, so the next anonymous upload
+            // from this browser belongs to the same visitor.
+            this.guestSession.remember(event.body.guestSessionId);
             return { kind: 'accepted' as const, value: event.body };
           }
           return { kind: 'ignore' as const };
@@ -290,6 +303,15 @@ export class ScoreUploadService {
       'UNKNOWN',
     );
   }
+}
+
+/** Mirrors `UploadAcceptedResponse` on the backend. */
+interface UploadAcceptedResponse {
+  scoreId: string;
+  jobId: string;
+  status?: string;
+  /** Present only for anonymous uploads. */
+  guestSessionId?: string | null;
 }
 
 /** Mirrors `ScoreStatusResponse` on the backend. */

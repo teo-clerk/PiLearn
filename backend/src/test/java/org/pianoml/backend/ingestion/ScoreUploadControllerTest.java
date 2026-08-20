@@ -10,6 +10,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.pianoml.backend.entity.Author;
+import org.pianoml.backend.identity.OwnerScope;
+import org.pianoml.backend.identity.OwnerScopeResolver;
 import org.pianoml.backend.entity.Score;
 import org.pianoml.backend.entity.User;
 import org.pianoml.backend.omr.OmrSubmission;
@@ -17,7 +20,6 @@ import org.pianoml.backend.omr.OmrSubmitRequest;
 import org.pianoml.backend.omr.OmrSubmitResponse;
 import org.pianoml.backend.omr.OmrWorkerClient;
 import org.pianoml.backend.repository.ScoreRepository;
-import org.pianoml.backend.service.AccountService;
 import org.pianoml.backend.storage.ScoreStorageException;
 import org.pianoml.backend.storage.ScoreStorageService;
 import org.springframework.http.HttpStatus;
@@ -50,16 +52,19 @@ class ScoreUploadControllerTest {
   @Mock private ScoreIngestionService ingestionService;
   @Mock private OmrWorkerClient workerClient;
   @Mock private ScoreRepository scoreRepository;
-  @Mock private AccountService accountService;
+  @Mock private OwnerScopeResolver ownerResolver;
+  @Mock private AuthorResolver authorResolver;
 
   private ScoreUploadController controller;
   private User owner;
+  private Author author;
   private UUID scoreId;
 
   @BeforeEach
   void setUp() {
     controller = new ScoreUploadController(
-        storageService, ingestionService, workerClient, scoreRepository, accountService);
+        storageService, ingestionService, workerClient, scoreRepository, ownerResolver,
+        authorResolver);
 
     owner = new User();
     owner.setId(UUID.randomUUID());
@@ -67,7 +72,13 @@ class ScoreUploadControllerTest {
 
     SecurityContextHolder.getContext().setAuthentication(
         new UsernamePasswordAuthenticationToken(owner.getId().toString(), null));
-    when(accountService.getUserFromAuthentication(any())).thenReturn(owner);
+    when(ownerResolver.resolve(any()))
+        .thenReturn(new OwnerScope(owner, null, false));
+
+    author = new Author();
+    author.setId(UUID.randomUUID());
+    author.setName("Unknown");
+    when(authorResolver.resolve(any())).thenReturn(author);
 
     when(scoreRepository.save(any(Score.class))).thenAnswer(invocation -> {
       Score score = invocation.getArgument(0);
@@ -96,7 +107,7 @@ class ScoreUploadControllerTest {
       workerAccepts();
 
       var response = controller.upload(pdf("score.pdf", "%PDF-1.7 data".getBytes()),
-          "My Piece", "Chopin", false);
+          "My Piece", "Chopin", false, null);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
       assertThat(response.getBody()).isNotNull();
@@ -110,7 +121,7 @@ class ScoreUploadControllerTest {
     void storesBeforeSubmitting() {
       workerAccepts();
 
-      controller.upload(pdf("score.pdf", "%PDF-1.7".getBytes()), null, null, false);
+      controller.upload(pdf("score.pdf", "%PDF-1.7".getBytes()), null, null, false, null);
 
       // Order matters: if the worker call ran first and storage then failed, the file
       // would be gone while a job was already running against it.
@@ -124,7 +135,7 @@ class ScoreUploadControllerTest {
     void marksQueued() {
       workerAccepts();
 
-      controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false);
+      controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null);
 
       verify(ingestionService).markQueued(scoreId, "job_abc");
     }
@@ -134,7 +145,7 @@ class ScoreUploadControllerTest {
     void privateByDefault() {
       workerAccepts();
 
-      controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false);
+      controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null);
 
       var captor = ArgumentCaptor.forClass(Score.class);
       verify(scoreRepository, atLeastOnce()).save(captor.capture());
@@ -147,7 +158,7 @@ class ScoreUploadControllerTest {
     void derivesTitleFromFilename() {
       workerAccepts();
 
-      controller.upload(pdf("Nocturne in E flat.pdf", "%PDF".getBytes()), null, null, false);
+      controller.upload(pdf("Nocturne in E flat.pdf", "%PDF".getBytes()), null, null, false, null);
 
       var captor = ArgumentCaptor.forClass(Score.class);
       verify(scoreRepository, atLeastOnce()).save(captor.capture());
@@ -161,7 +172,7 @@ class ScoreUploadControllerTest {
 
       for (String name : new String[] {"a.musicxml", "b.xml", "c.mxl", "d.mid", "e.midi"}) {
         var file = new MockMultipartFile("file", name, "application/octet-stream", "x".getBytes());
-        assertThat(controller.upload(file, null, null, false).getStatusCode())
+        assertThat(controller.upload(file, null, null, false, null).getStatusCode())
             .isEqualTo(HttpStatus.ACCEPTED);
       }
     }
@@ -176,7 +187,7 @@ class ScoreUploadControllerTest {
     void rejectsEmpty() {
       var empty = new MockMultipartFile("file", "score.pdf", "application/pdf", new byte[0]);
 
-      assertThatThrownBy(() -> controller.upload(empty, null, null, false))
+      assertThatThrownBy(() -> controller.upload(empty, null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("400");
     }
@@ -186,7 +197,7 @@ class ScoreUploadControllerTest {
     void rejectsWrongExtension() {
       var exe = new MockMultipartFile("file", "virus.exe", "application/octet-stream", "x".getBytes());
 
-      assertThatThrownBy(() -> controller.upload(exe, null, null, false))
+      assertThatThrownBy(() -> controller.upload(exe, null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("415");
     }
@@ -196,7 +207,7 @@ class ScoreUploadControllerTest {
     void rejectsImageContentType() {
       var image = new MockMultipartFile("file", "score.pdf", "image/png", "x".getBytes());
 
-      assertThatThrownBy(() -> controller.upload(image, null, null, false))
+      assertThatThrownBy(() -> controller.upload(image, null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("415");
     }
@@ -208,7 +219,7 @@ class ScoreUploadControllerTest {
           "file", "huge.pdf", "application/pdf",
           new byte[(int) ScoreUploadController.MAX_BYTES + 1]);
 
-      assertThatThrownBy(() -> controller.upload(big, null, null, false))
+      assertThatThrownBy(() -> controller.upload(big, null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("413");
     }
@@ -218,7 +229,7 @@ class ScoreUploadControllerTest {
     void rejectionTouchesNothing() {
       var exe = new MockMultipartFile("file", "x.exe", "application/octet-stream", "x".getBytes());
 
-      assertThatThrownBy(() -> controller.upload(exe, null, null, false))
+      assertThatThrownBy(() -> controller.upload(exe, null, null, false, null))
           .isInstanceOf(ResponseStatusException.class);
 
       verifyNoInteractions(storageService, workerClient, ingestionService);
@@ -226,14 +237,53 @@ class ScoreUploadControllerTest {
     }
 
     @Test
-    @DisplayName("requires an authenticated user")
-    void requiresAuth() {
-      when(accountService.getUserFromAuthentication(any())).thenReturn(null);
+    @DisplayName("the score is given an author — author_id is NOT NULL in the database")
+    void scoreAlwaysHasAnAuthor() {
+      workerAccepts();
 
-      assertThatThrownBy(() ->
-          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false))
-          .isInstanceOf(ResponseStatusException.class)
-          .hasMessageContaining("401");
+      controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null);
+
+      ArgumentCaptor<Score> saved = ArgumentCaptor.forClass(Score.class);
+      verify(scoreRepository, atLeastOnce()).save(saved.capture());
+      assertThat(saved.getValue().getAuthor()).isSameAs(author);
+    }
+
+    @Test
+    @DisplayName("an anonymous visitor can upload, and the session id comes back")
+    void guestUploadIsAccepted() {
+      User guest = new User();
+      guest.setId(OwnerScopeResolver.GUEST_USER_ID);
+      when(ownerResolver.resolve(any()))
+          .thenReturn(new OwnerScope(guest, "guest_abc123def456", true));
+      workerAccepts();
+
+      var response =
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null);
+
+      assertThat(response.getStatusCode().value()).isEqualTo(202);
+      // Returned so the browser can keep the same identity across uploads.
+      assertThat(response.getBody().guestSessionId()).isEqualTo("guest_abc123def456");
+
+      ArgumentCaptor<Score> saved = ArgumentCaptor.forClass(Score.class);
+      verify(scoreRepository, atLeastOnce()).save(saved.capture());
+      assertThat(saved.getValue().getGuestSessionId()).isEqualTo("guest_abc123def456");
+      assertThat(saved.getValue().getOwner().getId()).isEqualTo(OwnerScopeResolver.GUEST_USER_ID);
+    }
+
+    @Test
+    @DisplayName("a signed-in upload carries no guest session")
+    void signedInUploadHasNoGuestSession() {
+      workerAccepts();
+
+      var response =
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null);
+
+      assertThat(response.getBody().guestSessionId()).isNull();
+
+      ArgumentCaptor<Score> saved = ArgumentCaptor.forClass(Score.class);
+      verify(scoreRepository, atLeastOnce()).save(saved.capture());
+      assertThat(saved.getValue().getGuestSessionId()).isNull();
+      assertThat(saved.getValue().getOwner()).isSameAs(owner);
     }
   }
 
@@ -249,7 +299,7 @@ class ScoreUploadControllerTest {
               scoreId.toString(), "WORKER_UNREACHABLE", "connection refused"));
 
       assertThatThrownBy(() ->
-          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false))
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("503");
     }
@@ -262,7 +312,7 @@ class ScoreUploadControllerTest {
               scoreId.toString(), "WORKER_REJECTED", "encrypted PDF"));
 
       assertThatThrownBy(() ->
-          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false))
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("502");
     }
@@ -274,7 +324,7 @@ class ScoreUploadControllerTest {
           .thenReturn(OmrSubmission.failure(scoreId.toString(), "WORKER_REJECTED", "bad"));
 
       assertThatThrownBy(() ->
-          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false))
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null))
           .isInstanceOf(ResponseStatusException.class);
 
       var captor = ArgumentCaptor.forClass(Score.class);
@@ -291,7 +341,7 @@ class ScoreUploadControllerTest {
           .when(storageService).putRaw(any(), any(), any(), any());
 
       assertThatThrownBy(() ->
-          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false))
+          controller.upload(pdf("score.pdf", "%PDF".getBytes()), null, null, false, null))
           .isInstanceOf(ResponseStatusException.class)
           .hasMessageContaining("503");
 

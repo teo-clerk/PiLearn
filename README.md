@@ -152,7 +152,29 @@ STORAGE_SECRET_KEY=<choose one, 8+ chars>
 Every key is documented in [`.env.example`](.env.example). `.env` is gitignored — never commit
 a filled-in copy.
 
-### 2. Start infrastructure
+### 2. Start everything
+
+```bash
+tools/dev-up.sh
+```
+
+Checks prerequisites and ports, brings up Postgres, MinIO (with its bucket), Redis and the
+OMR worker, starts the backend and the Angular dev server, then prints every URL and log
+command. `tools/dev-down.sh` stops it all again.
+
+| Flag | Effect |
+|---|---|
+| `--infra-only` | containers only — run the backend and frontend yourself (steps 3 and 4) |
+| `--no-worker` | skip the 6 GB OMR image; uploads fail, everything else works |
+| `--backend-in-docker` | run Spring in a container instead of on the host |
+
+Already running Postgres on 5432? Set `DB_PORT` in `.env` (and match `DB_URL`) instead of
+stopping it. `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `REDIS_PORT`, `WORKER_PORT` and
+`BACKEND_PORT` work the same way.
+
+Steps 3–5 below are the manual equivalents, for when you want one piece at a time.
+
+### 2b. Start infrastructure only
 
 ```bash
 docker compose up -d          # postgres + minio + bucket creation
@@ -194,6 +216,12 @@ CPU-only PyTorch, MuseScore 3 and homr — **20–40 minutes, ~6 GB**.
 ```bash
 docker compose --profile omr up -d --build
 ```
+
+### 6. Check it actually works
+
+Compiling is not the same as working. Walk the upload → practice path in a real browser
+using [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md). No account is needed — anonymous
+uploads are attached to a guest session.
 
 ---
 

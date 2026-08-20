@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.pianoml.backend.document.ScoreDocumentEntity;
 import org.pianoml.backend.document.ScoreDocumentNotFoundException;
 import org.pianoml.backend.document.ScoreDocumentService;
+import org.pianoml.backend.profile.SkillLevel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,9 +31,9 @@ public class RoadmapService {
 
   private final ScoreDocumentService documentService;
   private final ObjectMapper objectMapper;
+  private final ChunkPlanner chunkPlanner;
+  private final StageLadderBuilder ladderBuilder;
 
-  /** Tempo ladder multiplier per rung (PRODUCT_SPEC §5.2). */
-  private static final double TEMPO_RAMP_FACTOR = 1.10;
   private static final int TEMPO_GRID_BPM = 5;
   private static final double MIN_START_PCT = 0.45;
   private static final double MAX_START_PCT = 0.85;
@@ -73,11 +74,19 @@ public class RoadmapService {
         chunks);
   }
 
+  /**
+   * Plan the practice units, then build a stage ladder for each.
+   *
+   * <p>Two steps rather than one because they answer different questions: what to
+   * practise and in what size pieces ({@link ChunkPlanner}), and what to do with each
+   * piece ({@link StageLadderBuilder}). Both depend on the learner's level, and neither
+   * is a variation of the other.
+   */
   private List<RoadmapChunk> buildChunks(
       JsonNode document, double targetTempo, RoadmapParams params) {
 
-    List<RoadmapChunk> chunks = new ArrayList<>();
     List<ScoreDocumentChunk> documentChunks = readChunks(document);
+    int measureCount = document.path("meta").path("measure_count").asInt(0);
     boolean bothHands = hasBothHands(document);
 
     // Fallback for documents analysed before chunking existed. Deliberately WARN, not
@@ -85,32 +94,50 @@ public class RoadmapService {
     // piece, which is a badly degraded roadmap. It ran silently for every score while
     // the worker emitted `segments` and no `chunks` field at all, and nobody noticed.
     if (documentChunks.isEmpty()) {
-      int measureCount = document.path("meta").path("measure_count").asInt(0);
       if (measureCount == 0) {
         log.warn("document has neither chunks nor measures; returning an empty roadmap");
-        return chunks;
+        return List.of();
       }
       log.warn(
           "document has no 'chunks' field — falling back to one whole-piece chunk over "
               + "{} measures. Re-ingest the score to get a real practice breakdown.",
           measureCount);
-      chunks.add(buildChunk(0, 0, measureCount - 1, 5.0,
-          "Bars 1-" + measureCount, targetTempo, params, bothHands));
-      return chunks;
+      documentChunks = List.of(new ScoreDocumentChunk(
+          "fallback-0", 0, 0, measureCount - 1, measureCount, 5.0, "PHRASE",
+          "Bars 1-" + measureCount, "FALLBACK", List.of(), List.of()));
     }
 
-    for (ScoreDocumentChunk chunk : documentChunks) {
-      chunks.add(buildChunk(
-          chunk.ordinal(),
-          chunk.startMeasure(),
-          chunk.endMeasure(),
-          chunk.difficulty(),
-          chunk.label(),
-          targetTempo,
-          params,
-          bothHands));
+    List<PracticeUnit> units =
+        chunkPlanner.plan(documentChunks, measureCount, params.skillLevel());
+
+    List<RoadmapChunk> chunks = new ArrayList<>();
+    for (PracticeUnit unit : units) {
+      int startTempo = startTempoFor(unit.difficulty(), targetTempo, params.skillLevel());
+      List<RoadmapStage> stages = ladderBuilder.build(
+          unit, params.skillLevel(), targetTempo, startTempo,
+          bothHands, params.handsSeparateFirst());
+
+      chunks.add(new RoadmapChunk(
+          unit.ordinal(), unit.startMeasure(), unit.endMeasure(), unit.measureCount(),
+          Math.round(unit.difficulty() * 100.0) / 100.0, unit.label(), startTempo, stages));
     }
     return chunks;
+  }
+
+  /**
+   * Where the tempo ladder starts for one unit.
+   *
+   * <p>Harder music starts slower. A beginner starts slower still and ignores the
+   * difficulty adjustment entirely — at 40% of target, a difficult bar and an easy one
+   * are both simply "slow", and scaling further would drop below a playable pulse.
+   */
+  private int startTempoFor(double difficulty, double targetTempo, SkillLevel level) {
+    if (!level.atLeast(SkillLevel.INTERMEDIATE)) {
+      return Math.max(30, roundToGrid(targetTempo * 0.40));
+    }
+    double startPct = Math.clamp(
+        1.0 - DIFFICULTY_TEMPO_PENALTY * difficulty, MIN_START_PCT, MAX_START_PCT);
+    return roundToGrid(targetTempo * startPct);
   }
 
   /**
@@ -140,69 +167,6 @@ public class RoadmapService {
       }
     }
     return false;
-  }
-
-  private RoadmapChunk buildChunk(
-      int ordinal, int startMeasure, int endMeasure, double difficulty,
-      String label, double targetTempo, RoadmapParams params, boolean bothHands) {
-
-    double startPct = Math.clamp(
-        1.0 - DIFFICULTY_TEMPO_PENALTY * difficulty, MIN_START_PCT, MAX_START_PCT);
-    int startTempo = roundToGrid(targetTempo * startPct);
-    int measures = endMeasure - startMeasure + 1;
-
-    List<RoadmapStage> stages = new ArrayList<>();
-    int stageOrdinal = 0;
-
-    if (params.handsSeparateFirst() && bothHands) {
-      stages.add(stage(stageOrdinal++, "RIGHT", startTempo, "WAIT",
-          criterion(0.95, 0, 2), measures));
-      stages.add(stage(stageOrdinal++, "LEFT", startTempo, "WAIT",
-          criterion(0.95, 0, 2), measures));
-    }
-
-    stages.add(stage(stageOrdinal++, "BOTH", startTempo, "WAIT",
-        criterion(0.95, 0, 2), measures));
-    stages.add(stage(stageOrdinal++, "BOTH", startTempo, "FLOW",
-        criterion(0.92, 120, 3), measures));
-
-    // Tempo ramp: multiplicative rungs up to the target, each on the bpm grid.
-    int rung = startTempo;
-    while (rung < roundToGrid(targetTempo)) {
-      rung = Math.max(rung + TEMPO_GRID_BPM, roundToGrid(rung * TEMPO_RAMP_FACTOR));
-      int capped = Math.min(rung, roundToGrid(targetTempo));
-      boolean isFinal = capped >= roundToGrid(targetTempo);
-      stages.add(stage(
-          stageOrdinal++, "BOTH", capped, "FLOW",
-          isFinal ? criterion(0.95, 80, 1) : criterion(0.90, 100, 1),
-          measures));
-      if (isFinal) {
-        break;
-      }
-    }
-
-    return new RoadmapChunk(
-        ordinal, startMeasure, endMeasure, measures,
-        Math.round(difficulty * 100.0) / 100.0, label, startTempo, stages);
-  }
-
-  private RoadmapStage stage(
-      int ordinal, String hand, int tempoBpm, String mode,
-      MasteryCriterion criterion, int measures) {
-    return new RoadmapStage(
-        ordinal, hand, tempoBpm, mode, !"WAIT".equals(mode), criterion,
-        estimateStageMinutes(measures, criterion.consecutiveCleanRuns()));
-  }
-
-  private MasteryCriterion criterion(double accuracy, int maxRmsMs, int cleanRuns) {
-    return new MasteryCriterion(accuracy, maxRmsMs, cleanRuns, 2);
-  }
-
-  /** Rough: a run takes roughly 4 s per bar, and a stage needs several attempts. */
-  private int estimateStageMinutes(int measures, int cleanRuns) {
-    double runSeconds = measures * 4.0;
-    double attempts = Math.max(cleanRuns, 1) * 2.5;
-    return Math.max(2, (int) Math.ceil(runSeconds * attempts / 60.0));
   }
 
   private int estimateWeeks(int totalMinutes) {

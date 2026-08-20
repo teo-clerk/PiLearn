@@ -1,0 +1,48 @@
+@reference "tailwindcss";
+
+.guest-banner {
+  @apply flex items-center gap-3 rounded-xl border px-4 py-3;
+  border-color: color-mix(in srgb, var(--color-accent, #6366f1) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 10%, transparent);
+}
+
+.guest-banner__icon {
+  @apply text-lg leading-none opacity-70;
+}
+
+.guest-banner__text {
+  @apply flex-1 text-sm leading-snug;
+}
+
+.guest-banner__actions {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.guest-banner__cta {
+  @apply rounded-lg px-3 py-1.5 text-sm font-medium no-underline transition-opacity;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+}
+
+.guest-banner__cta:hover {
+  @apply opacity-90;
+}
+
+.guest-banner__dismiss {
+  @apply rounded-md px-2 py-1 text-sm opacity-60 transition-opacity;
+}
+
+.guest-banner__dismiss:hover {
+  @apply opacity-100;
+}
+
+/* Stacked on narrow screens: the CTA must never push the message off-screen. */
+@media (max-width: 640px) {
+  .guest-banner {
+    @apply flex-wrap;
+  }
+
+  .guest-banner__text {
+    @apply basis-full;
+  }
+}

@@ -12,13 +12,14 @@ interface SessionLike {
   providedIn: 'root'
 })
 export class SessionStorageService {
-  private loggedIn = new BehaviorSubject<boolean>(this.hasStoredSession());
+  // Order matters. `loggedIn` used to be declared first and called hasStoredSession()
+  // while `isBrowser` was still undefined, so the check short-circuited and every
+  // session started as signed-out — a returning user appeared logged out until they
+  // signed in again. Field initialisers run in declaration order; isBrowser must be
+  // resolved before anything reads it.
   private platformId = inject(PLATFORM_ID);
-  private isBrowser: boolean;
-
-  constructor() {
-    this.isBrowser = isPlatformBrowser(this.platformId);
-  }
+  private isBrowser = isPlatformBrowser(this.platformId);
+  private loggedIn = new BehaviorSubject<boolean>(this.hasStoredSession());
 
   get isLoggedIn(): Observable<boolean> {
     return this.loggedIn.asObservable();

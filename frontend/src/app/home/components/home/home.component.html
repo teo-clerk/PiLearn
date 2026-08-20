@@ -1,4 +1,8 @@
 <div class="home">
+  @if (showOnboarding()) {
+    <app-skill-onboarding (done)="onOnboardingDone()" />
+  }
+
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
   <app-home-hero [pills]="pills" (fileAccepted)="onFileAccepted($event)" />
 

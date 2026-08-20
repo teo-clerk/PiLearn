@@ -1,0 +1,45 @@
+<section class="my-scores">
+  <header class="my-scores__header">
+    <div>
+      <h1 class="my-scores__title">My scores</h1>
+      <p class="my-scores__lede">
+        Everything you've uploaded, and where you left off.
+        <span class="my-scores__level">Practising as: {{ skillLabel() }}</span>
+      </p>
+    </div>
+    <a class="my-scores__upload" routerLink="/import">Upload a score</a>
+  </header>
+
+  @if (isGuest()) {
+    <p class="my-scores__guest" role="status">
+      You're browsing as a guest — this library lives in this browser.
+      <a routerLink="/account/create">Create a free account</a> to keep it.
+    </p>
+  }
+
+  @if (isLoading()) {
+    <div class="my-scores__state" role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading your scores…</p>
+    </div>
+  } @else if (error(); as message) {
+    <div class="my-scores__state my-scores__state--error" role="alert">
+      <p>{{ message }}</p>
+      <button type="button" class="my-scores__retry" (click)="retry()">Try again</button>
+    </div>
+  } @else if (isEmpty()) {
+    <div class="my-scores__state">
+      <p class="my-scores__empty-title">Nothing here yet</p>
+      <p>Upload a PDF of any piece and we'll build you a practice plan.</p>
+      <a class="my-scores__upload" routerLink="/import">Upload your first score</a>
+    </div>
+  } @else {
+    <ul class="card-grid">
+      @for (entry of entries(); track entry.scoreId) {
+        <li>
+          <app-score-progress-card [entry]="entry" (resume)="resume($event)" />
+        </li>
+      }
+    </ul>
+  }
+</section>

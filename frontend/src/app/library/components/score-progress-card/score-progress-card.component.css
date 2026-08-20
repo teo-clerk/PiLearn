@@ -1,0 +1,79 @@
+@reference "tailwindcss";
+
+.card {
+  @apply flex h-full flex-col gap-3 rounded-xl border p-4;
+  border-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.card--mastered {
+  border-color: color-mix(in srgb, #22c55e 40%, transparent);
+}
+
+.card__title {
+  @apply text-base font-semibold leading-tight;
+}
+
+.card__composer {
+  @apply text-sm opacity-65;
+}
+
+.card__badges {
+  @apply flex flex-wrap gap-1.5;
+}
+
+.badge {
+  @apply rounded-full px-2 py-0.5 text-xs;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.badge--difficulty {
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 14%, transparent);
+}
+
+.badge--mastered {
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+}
+
+/* Pushed to the bottom so cards of different heights keep their buttons aligned. */
+.card__progress {
+  @apply mt-auto flex flex-col gap-1.5;
+}
+
+.progress {
+  @apply h-1.5 w-full overflow-hidden rounded-full;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.progress__fill {
+  @apply h-full rounded-full;
+  background: var(--color-accent, #6366f1);
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill { transition: none; }
+}
+
+.card__stage,
+.card__when {
+  @apply text-xs opacity-65;
+}
+
+.card__resume {
+  @apply rounded-lg px-3 py-2 text-sm font-semibold transition-opacity;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+}
+
+.card__resume:hover {
+  @apply opacity-90;
+}
+
+.card__status {
+  @apply mt-auto rounded-lg px-3 py-2 text-xs;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.card__status--failed {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+}

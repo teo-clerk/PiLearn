@@ -10,6 +10,7 @@ import type {
   RoadmapStage,
 } from '../../core/score/score-document.model';
 import { AlignmentCursorService } from './alignment-cursor.service';
+import { WaitGateService } from './wait-gate.service';
 
 /** The four practice phases a learner navigates between. */
 export type StagePhase = 'HANDS_SEPARATE' | 'CHUNK_DRILL' | 'TEMPO_RAMP' | 'FULL_FLUENCY';
@@ -67,6 +68,7 @@ export interface AttemptResult {
 @Injectable({ providedIn: 'root' })
 export class PracticeSessionService {
   private readonly cursor = inject(AlignmentCursorService);
+  private readonly waitGate = inject(WaitGateService);
 
   // ── Session ────────────────────────────────────────────────────────────────
   private readonly roadmapState = signal<Roadmap | null>(null);
@@ -81,12 +83,22 @@ export class PracticeSessionService {
   private readonly consecutivePassesState = signal(0);
   private readonly lastResultState = signal<AttemptResult | null>(null);
 
+  /**
+   * Set when a WAIT-mode chunk has been played to its end.
+   *
+   * WAIT mode has no transport, so nothing schedules an end callback the way FLOW does.
+   * The learner's last note is the end, and without this the attempt would never score
+   * and the summary would never appear — the stage would simply stop responding.
+   */
+  private readonly waitChunkCompleteState = signal(false);
+
   readonly roadmap = this.roadmapState.asReadonly();
   readonly isPlaying = this.isPlayingState.asReadonly();
   readonly played = this.playedState.asReadonly();
   readonly attemptCount = this.attemptCountState.asReadonly();
   readonly consecutivePasses = this.consecutivePassesState.asReadonly();
   readonly lastResult = this.lastResultState.asReadonly();
+  readonly waitChunkComplete = this.waitChunkCompleteState.asReadonly();
 
   /** Every stage across every chunk, flattened into practice order. */
   readonly allStages = computed<ResolvedStage[]>(() => {
@@ -258,6 +270,7 @@ export class PracticeSessionService {
     if (index < 0 || index >= total) return;
 
     this.stageIndexState.set(index);
+    this.waitChunkCompleteState.set(false);
     this.tempoOverrideState.set(null);
     this.consecutivePassesState.set(0);
     this.attemptCountState.set(0);
@@ -265,6 +278,7 @@ export class PracticeSessionService {
 
     const chunk = this.currentChunk();
     if (chunk) this.cursor.jumpToMeasure(chunk.startMeasure);
+    this.armWaitGate();
   }
 
   nextStage(): void {
@@ -289,8 +303,10 @@ export class PracticeSessionService {
     this.resetAttempt();
     this.attemptStartMs.set(nowMs);
     this.isPlayingState.set(true);
+    this.waitChunkCompleteState.set(false);
     const chunk = this.currentChunk();
     if (chunk) this.cursor.jumpToMeasure(chunk.startMeasure);
+    this.armWaitGate();
   }
 
   /**
@@ -306,6 +322,26 @@ export class PracticeSessionService {
 
     let verdict: NoteVerdict;
     let deviation = 0;
+
+    // A rhythm stage scores timing alone. The learner has been told any key counts, so
+    // marking their key WRONG because it was not the notated pitch would contradict the
+    // instruction on screen and teach them to distrust the feedback.
+    if (this.practiceMode() === 'RHYTHM') {
+      deviation = expectedAtMs === null ? 0 : atMs - expectedAtMs;
+      const magnitude = Math.abs(deviation);
+      verdict = magnitude <= PERFECT_WINDOW_MS
+        ? 'CORRECT'
+        : magnitude <= GOOD_WINDOW_MS
+          ? (deviation < 0 ? 'EARLY' : 'LATE')
+          : (deviation < 0 ? 'EARLY' : 'LATE');
+
+      this.playedState.update((notes) => [
+        ...notes,
+        { midi, atMs, verdict, deviationMs: deviation,
+          measureIndex: this.cursor.currentMeasure() },
+      ]);
+      return verdict;
+    }
 
     if (handFiltered.includes(midi)) {
       deviation = expectedAtMs === null ? 0 : atMs - expectedAtMs;
@@ -333,7 +369,47 @@ export class PracticeSessionService {
       },
     ]);
 
+    this.advanceIfStepSatisfied(midi);
     return verdict;
+  }
+
+  /**
+   * In WAIT mode, move the cursor on once the learner has played the whole step.
+   *
+   * Lives here rather than in the input handlers because every input path — MIDI, QWERTY
+   * and the on-screen keyboard — already funnels through {@link recordNote}. Putting it
+   * in the handlers instead would mean three copies, and the third one would be the one
+   * that got forgotten.
+   */
+  private advanceIfStepSatisfied(midi: number): void {
+    const mode = this.practiceMode();
+    if (mode === 'FLOW') return;
+
+    // RHYTHM ignores pitch entirely; WAIT needs the actual notes.
+    const satisfied =
+      mode === 'RHYTHM' ? this.waitGate.registerAnyKey() : this.waitGate.register(midi);
+
+    if (!satisfied) return;
+
+    // Capture before advancing: at the very end of the piece `next()` is a no-op, so
+    // asking afterwards whether we ran out would always say no.
+    const chunk = this.currentChunk();
+    const endOfPiece = this.cursor.isAtLastStep();
+
+    this.cursor.next();
+    this.armWaitGate();
+
+    const pastChunkEnd =
+      chunk !== null && this.cursor.currentMeasure() > chunk.endMeasure;
+
+    if (endOfPiece || pastChunkEnd) {
+      this.waitChunkCompleteState.set(true);
+    }
+  }
+
+  /** Point the gate at whatever the cursor is now waiting for. */
+  private armWaitGate(): void {
+    this.waitGate.arm(this.handMode());
   }
 
   /** Note the transport expected but nobody played. */

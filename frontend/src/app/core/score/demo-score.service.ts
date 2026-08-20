@@ -96,12 +96,18 @@ export class DemoScoreService {
         accuracy: number,
         rms: number,
         runs: number,
+        label = '',
       ): RoadmapStage => ({
         ordinal: ordinal++,
         handMode,
         tempoBpm,
         mode,
-        useMetronome: mode !== 'WAIT',
+        useMetronome: mode !== 'WAIT' && mode !== 'RHYTHM',
+        // The demo score stands in for an already-ingested piece, so it mirrors the
+        // INTERMEDIATE ladder the backend builds: no beginner aids.
+        showNoteNames: false,
+        guideOpposingHand: false,
+        label: label || `${handMode} · ${tempoBpm} bpm`,
         criterion: {
           minPitchAccuracy: accuracy,
           maxTimingRmsMs: rms,

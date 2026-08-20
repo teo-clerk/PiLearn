@@ -1,0 +1,117 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PiLearn — development overlay
+#
+# Layered on top of docker-compose.yml; never used alone:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     --profile omr up -d --wait
+#
+# In practice you do not type that — `tools/dev-up.sh` does, plus the pre-flight
+# checks and the URLs.
+#
+# What this overlay adds:
+#   • a containerised Spring backend (profile: backend) for anyone who does not
+#     want a JDK on the host;
+#   • dev-tuned healthchecks, so `--wait` returns as soon as the stack is
+#     genuinely usable instead of on the next 30s poll.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # Poll fast in dev: `up --wait` blocks on these, and a 5s interval is the
+  # difference between the script returning in 10 seconds and in 40.
+  postgres:
+    healthcheck:
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  minio:
+    healthcheck:
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    healthcheck:
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+  worker:
+    healthcheck:
+      # The worker imports torch and warms a model on first request, so the
+      # container is alive long before it can answer. A generous start_period is
+      # what stops `--wait` declaring failure on a perfectly healthy boot.
+      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=4).status_code==200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      start_period: 120s
+      retries: 30
+
+  # minio-init is deliberately NOT a depends_on condition for the backend:
+  # `up --wait` treats any container that exits — even successfully — as a
+  # failed start, so a one-shot in the wait set fails the whole command.
+  # tools/dev-up.sh runs it as its own step instead.
+
+  # ── Spring backend, containerised ──────────────────────────────────────────
+  # Opt-in: `tools/dev-up.sh --backend-in-docker`. The default is to run the
+  # backend on the host, which is faster to restart and trivial to attach a
+  # debugger to.
+  backend:
+    profiles: ["backend"]
+    build:
+      # Repo root, not backend/: the pom reads ../openapi/api.yaml to generate its
+      # API layer, and that path is outside a backend-rooted context.
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    image: pilearn/backend:dev
+    container_name: pilearn-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      # Container-internal hostnames, not localhost — the host values in .env
+      # point at published ports and are wrong from inside the network.
+      DB_URL: jdbc:postgresql://postgres:5432/pianoml
+      DB_USERNAME: ${DB_USERNAME:-pilearn}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-pilearn-media}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:?STORAGE_ACCESS_KEY must be set in .env}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?STORAGE_SECRET_KEY must be set in .env}
+      STORAGE_PATH_STYLE_ACCESS: "true"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (min 64 chars)}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      OMR_WORKER_URL: http://worker:8000
+      OMR_WORKER_TOKEN: ${OMR_WORKER_TOKEN:-}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./backend/src:/workspace/backend/src:ro
+      - ./openapi:/workspace/openapi:ro
+      - maven-cache:/root/.m2
+    healthcheck:
+      # A TCP check, not an HTTP one: this project has no actuator dependency and
+      # the base image ships no curl. Spring binds the connector only after the
+      # context has started, so an open port is a truthful readiness signal.
+      #
+      # Explicitly bash: /dev/tcp is a bash builtin, and CMD-SHELL runs /bin/sh,
+      # which is dash here. Under sh the probe always fails and a perfectly healthy
+      # backend is reported as unhealthy.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 5s
+      start_period: 90s
+      retries: 30
+
+volumes:
+  maven-cache:

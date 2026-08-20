@@ -20,7 +20,9 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-pilearn}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
     ports:
-      - "5432:5432"
+      # Host port is configurable: developers commonly already run Postgres on
+      # 5432, and a stack that refuses to start for that reason is not usable.
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./tools/local/initdb.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
@@ -40,8 +42,8 @@ services:
       MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:?STORAGE_ACCESS_KEY must be set in .env}
       MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:?STORAGE_SECRET_KEY must be set in .env}
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # web console
+      - "${MINIO_PORT:-9000}:9000"           # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # web console
     volumes:
       - minio-data:/data
     healthcheck:
@@ -71,7 +73,7 @@ services:
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -109,7 +111,7 @@ services:
       JOB_TIMEOUT_SEC: ${JOB_TIMEOUT_SEC:-3600}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
-      - "8000:8000"
+      - "${WORKER_PORT:-8000}:8000"
     volumes:
       - worker-work:/home/appuser/work
       # Source mount for fast iteration; remove for a production-like run.

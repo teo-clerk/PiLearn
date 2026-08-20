@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface AuthorRepository extends CrudRepository<Author, UUID> {
   Optional<Author> findByMbid(@NotNull UUID mbid);
 
+  Optional<Author> findByNameIgnoreCase(String name);
+
   @Query("SELECT a FROM Author a WHERE a.name ILIKE %:name%")
   Iterable<Author> searchByNameIlike(@Param("name") String name);
 }

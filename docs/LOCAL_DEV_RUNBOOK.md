@@ -8,6 +8,49 @@ For first-time setup (secrets, Maven wrapper, prerequisites) see
 
 ---
 
+## Quickest start: one command
+
+```bash
+cp .env.example .env      # first time only; fill in the REQUIRED values
+tools/dev-up.sh
+```
+
+That checks prerequisites and ports, brings up Postgres, MinIO (with its bucket),
+Redis and the OMR worker, starts the backend and the Angular dev server, and prints
+every URL and log command. `tools/dev-down.sh` stops all of it again.
+
+| Flag | Effect |
+|---|---|
+| `--infra-only` | containers only; run backend and frontend yourself |
+| `--no-worker` | skip the 6 GB OMR image — uploads will fail, everything else works |
+| `--backend-in-docker` | run Spring in a container instead of on the host |
+
+Already have Postgres on 5432? Set `DB_PORT` in `.env` (and match `DB_URL`) rather
+than stopping it. `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `REDIS_PORT`, `WORKER_PORT` and
+`BACKEND_PORT` work the same way.
+
+For the full browser walkthrough of upload → practice, see
+[`E2E_SMOKE_TEST.md`](./E2E_SMOKE_TEST.md).
+
+**The dev proxy targets `http://localhost:8080`.** It previously pointed at the hosted
+API, so `npm start` set `BASE_PATH=http://localhost:8080` while the proxy quietly sent
+every request to production — locally-added endpoints appeared to be missing. Use
+`npm run start-remote` to develop against the hosted API on purpose.
+
+**Worker tests need a virtualenv on Python 3.11 or 3.12** (the package pins
+`<3.13`):
+
+```bash
+cd worker
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest tests -q
+```
+
+The rest of this document is the manual, step-by-step version — useful when something
+in the one-command path goes wrong, or when you only want one piece of the stack.
+
+---
+
 ## 0. What you actually need
 
 The practice surface has three dependencies, and you can skip two of them depending on

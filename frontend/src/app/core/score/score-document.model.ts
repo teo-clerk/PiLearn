@@ -281,8 +281,16 @@ export interface ScoreDocument {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type HandMode = 'RIGHT' | 'LEFT' | 'BOTH';
-/** WAIT blocks the transport until the expected notes are played; FLOW runs on. */
-export type PracticeMode = 'WAIT' | 'FLOW';
+/**
+ * How the transport behaves during a stage.
+ *
+ * - `RHYTHM` — any key counts; pitch is ignored entirely. The first thing a complete
+ *   novice can succeed at, because it asks for one new skill instead of two.
+ * - `WAIT` — the transport holds at the current note until the learner plays it. No time
+ *   pressure at all; the piece simply does not move on without them.
+ * - `FLOW` — runs at tempo regardless, and the learner keeps up.
+ */
+export type PracticeMode = 'RHYTHM' | 'WAIT' | 'FLOW';
 
 export interface MasteryCriterion {
   minPitchAccuracy: number;
@@ -297,6 +305,12 @@ export interface RoadmapStage {
   tempoBpm: number;
   mode: PracticeMode;
   useMetronome: boolean;
+  /** Draw pitch names on the keyboard and the cursor for this stage. */
+  showNoteNames: boolean;
+  /** Play the opposing hand back while the learner plays theirs. */
+  guideOpposingHand: boolean;
+  /** What the learner is being asked to do, in their words. */
+  label: string;
   criterion: MasteryCriterion;
   estimatedMinutes: number;
 }

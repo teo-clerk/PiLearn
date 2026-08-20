@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PiLearn backend — development image
+#
+# Deliberately NOT backend/Dockerfile. That one bundles the whole OMR toolchain
+# (homr, MuseScore, torch — ~6 GB, 20-40 min to build) because it used to run
+# recognition in-process. Recognition now lives in the FastAPI worker, so the
+# backend needs nothing but a JDK.
+#
+# Built from the REPO ROOT, not from backend/: the pom generates its API layer
+# from ${project.basedir}/../openapi/api.yaml, so a context rooted at backend/
+# cannot see the spec and the build dies in openapi-generator. The repo layout is
+# reproduced inside the image for the same reason.
+#
+# Runs `spring-boot:run` rather than a packaged jar: devtools restart is what
+# makes a container worth using here at all.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk
+
+WORKDIR /workspace/backend
+
+# Dependencies resolve in their own layer, so an ordinary source edit does not
+# re-download the world.
+COPY backend/.mvn/ .mvn/
+COPY backend/mvnw backend/pom.xml ./
+RUN ./mvnw -B -q dependency:go-offline -DskipTests || true
+
+COPY openapi/ /workspace/openapi/
+COPY backend/src/ src/
+
+EXPOSE 8080
+
+CMD ["./mvnw", "-B", "spring-boot:run"]

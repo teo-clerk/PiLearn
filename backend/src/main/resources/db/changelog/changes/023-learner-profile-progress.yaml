@@ -1,0 +1,215 @@
+databaseChangeLog:
+  - changeSet:
+      id: 023-user-profile
+      author: pilearn
+      comment: >
+        What we know about how a learner plays: skill level, notation fluency, preferred
+        input and a daily goal.
+
+        Scoped by (user_id, guest_session_id), not user_id alone. Every anonymous visitor
+        shares the seeded guest account from changeset 022, so a profile keyed on the user
+        would hand the first guest's answers to everyone who followed.
+      changes:
+        - createTable:
+            tableName: user_profile
+            schemaName: pianoml
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_profile_user
+                    referencedTableSchemaName: pianoml
+                    referencedTableName: user
+                    referencedColumnNames: id
+                    deleteCascade: true
+              - column:
+                  name: guest_session_id
+                  type: varchar(64)
+                  remarks: Set only for an anonymous visitor.
+              - column:
+                  name: skill_level
+                  type: varchar(20)
+                  defaultValue: BEGINNER_1
+                  constraints: { nullable: false }
+              - column:
+                  name: notation_fluency
+                  type: varchar(20)
+                  defaultValue: SOME
+                  constraints: { nullable: false }
+              - column:
+                  name: preferred_input
+                  type: varchar(20)
+                  defaultValue: QWERTY
+                  constraints: { nullable: false }
+              - column:
+                  name: daily_goal_minutes
+                  type: int
+                  defaultValueNumeric: 15
+                  constraints: { nullable: false }
+              - column:
+                  name: onboarded
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints: { nullable: false }
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 023-user-profile-uniqueness
+      author: pilearn
+      comment: >
+        One profile per identity.
+
+        Two partial indexes rather than one UNIQUE(user_id, guest_session_id): in SQL two
+        NULLs are never equal, so a plain composite constraint would happily allow a
+        signed-in user to accumulate unlimited profile rows.
+
+        Postgres-only. H2 (the test database) has no partial indexes, and the service layer
+        does find-then-create with a race fallback regardless — the constraint is the
+        backstop, not the mechanism.
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms: { type: postgresql }
+      changes:
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_user_profile_account
+              ON pianoml.user_profile (user_id)
+              WHERE guest_session_id IS NULL
+            rollback: DROP INDEX IF EXISTS pianoml.uq_user_profile_account
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_user_profile_guest
+              ON pianoml.user_profile (guest_session_id)
+              WHERE guest_session_id IS NOT NULL
+            rollback: DROP INDEX IF EXISTS pianoml.uq_user_profile_guest
+
+  - changeSet:
+      id: 023-score-progress
+      author: pilearn
+      comment: >
+        How far a learner has got with one score, so "Resume practice" can return them to
+        the exact stage and tempo they left.
+      changes:
+        - createTable:
+            tableName: score_progress
+            schemaName: pianoml
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: score_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_score_progress_score
+                    referencedTableSchemaName: pianoml
+                    referencedTableName: score
+                    referencedColumnNames: id
+                    deleteCascade: true
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_score_progress_user
+                    referencedTableSchemaName: pianoml
+                    referencedTableName: user
+                    referencedColumnNames: id
+                    deleteCascade: true
+              - column:
+                  name: guest_session_id
+                  type: varchar(64)
+              - column:
+                  name: stage_index
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column:
+                  name: chunk_ordinal
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column:
+                  name: stages_completed
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column:
+                  name: total_stages
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column:
+                  name: tempo_percent
+                  type: int
+                  defaultValueNumeric: 100
+                  constraints: { nullable: false }
+              - column:
+                  name: mastery_score
+                  type: double precision
+              - column:
+                  name: mastered
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints: { nullable: false }
+              - column:
+                  name: last_practiced_at
+                  type: timestamptz
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+
+        # The library lists by owner, newest practice first.
+        - createIndex:
+            tableName: score_progress
+            schemaName: pianoml
+            indexName: idx_score_progress_owner
+            columns:
+              - column: { name: user_id }
+              - column: { name: guest_session_id }
+              - column: { name: last_practiced_at, descending: true }
+
+  - changeSet:
+      id: 023-score-progress-uniqueness
+      author: pilearn
+      comment: One progress row per (score, identity). Same NULL reasoning as above.
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms: { type: postgresql }
+      changes:
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_score_progress_account
+              ON pianoml.score_progress (score_id, user_id)
+              WHERE guest_session_id IS NULL
+            rollback: DROP INDEX IF EXISTS pianoml.uq_score_progress_account
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_score_progress_guest
+              ON pianoml.score_progress (score_id, guest_session_id)
+              WHERE guest_session_id IS NOT NULL
+            rollback: DROP INDEX IF EXISTS pianoml.uq_score_progress_guest

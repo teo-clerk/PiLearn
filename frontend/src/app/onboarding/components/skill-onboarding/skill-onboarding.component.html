@@ -1,0 +1,64 @@
+<div class="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+  <div class="onboarding__panel">
+    <header class="onboarding__header">
+      <h2 id="onboarding-title" class="onboarding__title">Let's pitch this right</h2>
+      <p class="onboarding__lede">
+        Two questions, then we'll build a practice plan around your answers.
+      </p>
+    </header>
+
+    <fieldset class="question">
+      <legend class="question__legend">What is your piano experience?</legend>
+      <div class="question__options">
+        @for (choice of experienceChoices; track choice.value) {
+          <button
+            type="button"
+            class="option"
+            [class.option--selected]="experience() === choice.value"
+            [attr.aria-pressed]="experience() === choice.value"
+            (click)="chooseExperience(choice.value)"
+          >
+            <span class="option__label">{{ choice.label }}</span>
+            <span class="option__detail">{{ choice.detail }}</span>
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="question">
+      <legend class="question__legend">Do you read sheet music?</legend>
+      <div class="question__options question__options--compact">
+        @for (choice of readingChoices; track choice.value) {
+          <button
+            type="button"
+            class="option"
+            [class.option--selected]="reading() === choice.value"
+            [attr.aria-pressed]="reading() === choice.value"
+            (click)="chooseReading(choice.value)"
+          >
+            <span class="option__label">{{ choice.label }}</span>
+            <span class="option__detail">{{ choice.detail }}</span>
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    @if (preview(); as line) {
+      <p class="onboarding__preview" role="status">{{ line }}</p>
+    }
+
+    <footer class="onboarding__actions">
+      <button type="button" class="onboarding__skip" [disabled]="saving()" (click)="skip()">
+        Skip for now
+      </button>
+      <button
+        type="button"
+        class="onboarding__submit"
+        [disabled]="!canSubmit()"
+        (click)="submit()"
+      >
+        {{ saving() ? 'Saving…' : 'Build my plan' }}
+      </button>
+    </footer>
+  </div>
+</div>

@@ -1,0 +1,60 @@
+databaseChangeLog:
+  - changeSet:
+      id: 022-guest-user
+      author: pilearn
+      comment: >
+        A single well-known account that owns guest uploads.
+
+        score.owner_id is a NOT NULL foreign key, and relaxing it would weaken a
+        constraint that is correct for every other row. A seeded sentinel owner keeps
+        the schema honest while letting an anonymous visitor upload; the row is
+        identified by its fixed UUID so application code never has to look it up by
+        email or guess.
+
+        The password is a literal that BCrypt can never produce (it is not a valid
+        BCrypt hash), so no credential can ever authenticate as this account.
+      changes:
+        - insert:
+            tableName: user
+            schemaName: pianoml
+            columns:
+              - column: { name: id, value: "00000000-0000-0000-0000-00000000feed" }
+              - column: { name: email, value: "guest@pilearn.local" }
+              - column: { name: name, value: "Guest" }
+              - column: { name: password, value: "!GUEST-ACCOUNT-NO-LOGIN!" }
+              - column: { name: verified, valueBoolean: false }
+              - column: { name: roles, value: "GUEST" }
+      rollback:
+        - delete:
+            tableName: user
+            schemaName: pianoml
+            where: id = '00000000-0000-0000-0000-00000000feed'
+
+  - changeSet:
+      id: 022-score-guest-session
+      author: pilearn
+      comment: >
+        Opaque session id for a guest upload, so a visitor can see their own uploads
+        within a session and a future sign-up can claim them. Null for owned scores.
+      changes:
+        - addColumn:
+            tableName: score
+            schemaName: pianoml
+            columns:
+              - column:
+                  name: guest_session_id
+                  type: varchar(64)
+                  remarks: Set only for uploads made without an account.
+
+        - createIndex:
+            tableName: score
+            schemaName: pianoml
+            indexName: idx_score_guest_session
+            columns:
+              - column: { name: guest_session_id }
+      rollback:
+        - dropColumn:
+            tableName: score
+            schemaName: pianoml
+            columns:
+              - column: { name: guest_session_id }

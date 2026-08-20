@@ -49,7 +49,15 @@ public class SecurityConfig {
         .requestMatchers(HttpMethod.POST,
           "/account/login",
           "/account/create",
-          "/score/play/stats"
+          "/score/play/stats",
+          // Anonymous uploads: a visitor must be able to try the product before
+          // creating an account. The score is attached to the seeded guest owner and
+          // tagged with a session id (see OwnerScopeResolver).
+          "/api/v1/scores/upload",
+          // The skill questionnaire is the first thing a new visitor sees. Gating it
+          // behind a sign-up would put the account wall back in front of the product.
+          "/api/v1/profile",
+          "/api/v1/scores/*/progress"
         ).permitAll()
         .anyRequest().authenticated()
       );

@@ -45,27 +45,28 @@ describe('LinkComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  // `artistQuery` / `titleQuery` were renamed to `artistSearchQuery` / `workTitle`
+  // and this spec was never updated, so it stopped compiling — which took the whole
+  // karma suite with it, since every spec is built together.
   it('should initialize with default values', () => {
     expect(component.searchQuery).toBe('');
-    expect(component.artistQuery).toBe('');
-    expect(component.titleQuery).toBe('');
+    expect(component.artistSearchQuery).toBe('');
+    expect(component.workTitle).toBe('');
     expect(component.loading).toBeFalse();
     expect(component.showSongsOnly).toBeTrue();
   });
 
   it('should clear search', () => {
     component.searchQuery = 'test';
-    component.artistQuery = 'artist';
-    component.titleQuery = 'title';
     component.response = { created: '', count: 0, offset: 0, works: [] };
     component.error = 'some error';
+    component.hasSearched = true;
 
     component.clearSearch();
 
     expect(component.searchQuery).toBe('');
-    expect(component.artistQuery).toBe('');
-    expect(component.titleQuery).toBe('');
     expect(component.response).toBeNull();
     expect(component.error).toBeNull();
+    expect(component.hasSearched).toBeFalse();
   });
 });

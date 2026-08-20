@@ -15,6 +15,25 @@
       />
     }
 
+    <!-- What this stage is asking for. A beginner ladder has stages that differ in
+         kind, not just tempo, so "which stage am I on" is not answerable from the
+         transport alone. -->
+    @if (stageLabel(); as label) {
+      <div class="mode-bar" [class.mode-bar--waiting]="isWaitingForLearner()">
+        <span class="mode-bar__stage">{{ label }}</span>
+        @if (modeHint(); as hint) {
+          <span class="mode-bar__hint">{{ hint }}</span>
+        }
+        @if (isWaitingForLearner()) {
+          <span class="mode-bar__badge" role="status">Waiting for you</span>
+        }
+      </div>
+    }
+
+    @if (showGuestBanner()) {
+      <app-guest-banner (dismiss)="dismissGuestBanner()" />
+    }
+
     <!-- A roadmap built on a score with dropped pages teaches the wrong bars. This is
          surfaced at the top of the surface, not buried in a detail panel. -->
     @if (requiresReview()) {
@@ -52,6 +71,8 @@
           [keyHeight]="110"
           [keyHints]="keyHints()"
           [showKeyHints]="showKeyHints()"
+          [noteLabels]="noteLabels()"
+          [showNoteLabels]="showNoteNames()"
           (keyDown)="onVirtualKeyDown($event)"
           (keyUp)="onVirtualKeyUp($event)"
           (releaseAll)="onVirtualReleaseAll()"

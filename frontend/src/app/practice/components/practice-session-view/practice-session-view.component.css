@@ -124,3 +124,44 @@
   position: absolute; width: 1px; height: 1px; margin: -1px;
   padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
+
+
+/* ── Stage mode bar ──────────────────────────────────────────────────────────
+   Beginner ladders change what is being asked, not just how fast. The bar names
+   the stage so the learner is never guessing which rules apply right now. */
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #6366f1) 22%, transparent);
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 7%, transparent);
+  font-size: 0.875rem;
+}
+
+/* A visible signal that nothing is running out from under them. */
+.mode-bar--waiting {
+  border-color: color-mix(in srgb, #22c55e 40%, transparent);
+  background: color-mix(in srgb, #22c55e 10%, transparent);
+}
+
+.mode-bar__stage {
+  font-weight: 600;
+}
+
+.mode-bar__hint {
+  opacity: 0.75;
+}
+
+.mode-bar__badge {
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #052e16;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}

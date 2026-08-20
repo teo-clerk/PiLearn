@@ -1,0 +1,49 @@
+<article class="card" [class.card--mastered]="entry().mastered">
+  <div class="card__head">
+    <h2 class="card__title">{{ entry().title }}</h2>
+    <p class="card__composer">{{ entry().composer }}</p>
+  </div>
+
+  <div class="card__badges">
+    @if (entry().difficultyLabel; as level) {
+      <span class="badge badge--difficulty">{{ level }}</span>
+    }
+    @if (entry().measureCount) {
+      <span class="badge">{{ entry().measureCount }} bars</span>
+    }
+    @if (entry().mastered) {
+      <span class="badge badge--mastered">Mastered</span>
+    }
+  </div>
+
+  @if (isPlayable()) {
+    <div class="card__progress">
+      <div
+        class="progress"
+        role="progressbar"
+        [attr.aria-valuenow]="progressPercent()"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        [attr.aria-label]="'Progress through ' + entry().title"
+      >
+        <div class="progress__fill" [style.width.%]="progressPercent()"></div>
+      </div>
+      <p class="card__stage">{{ entry().stageSummary }}</p>
+      <p class="card__when">{{ lastPractised() }}</p>
+    </div>
+
+    <button type="button" class="card__resume" (click)="onResume()">
+      {{ actionLabel() }}
+    </button>
+  } @else {
+    <!-- Not playable yet. Say why, rather than offering a button that would open a
+         score with no notes in it. -->
+    <p
+      class="card__status"
+      [class.card__status--failed]="entry().status === 'FAILED'"
+      role="status"
+    >
+      {{ statusLabel() }}
+    </p>
+  }
+</article>

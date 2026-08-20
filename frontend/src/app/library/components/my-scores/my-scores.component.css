@@ -1,0 +1,77 @@
+@reference "tailwindcss";
+
+.my-scores {
+  @apply mx-auto w-full max-w-6xl px-4 py-8;
+}
+
+.my-scores__header {
+  @apply mb-6 flex flex-wrap items-start justify-between gap-4;
+}
+
+.my-scores__title {
+  @apply text-2xl font-semibold;
+}
+
+.my-scores__lede {
+  @apply mt-1 text-sm opacity-70;
+}
+
+.my-scores__level {
+  @apply ml-2 rounded-full px-2 py-0.5 text-xs font-medium;
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 12%, transparent);
+}
+
+.my-scores__upload {
+  @apply inline-block rounded-lg px-4 py-2 text-sm font-semibold no-underline transition-opacity;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+}
+
+.my-scores__upload:hover {
+  @apply opacity-90;
+}
+
+.my-scores__guest {
+  @apply mb-5 rounded-xl border px-4 py-3 text-sm;
+  border-color: color-mix(in srgb, var(--color-accent, #6366f1) 25%, transparent);
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 8%, transparent);
+}
+
+.my-scores__state {
+  @apply flex flex-col items-center gap-3 rounded-xl border border-dashed py-14 text-center text-sm;
+  border-color: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.my-scores__state--error {
+  border-style: solid;
+  border-color: color-mix(in srgb, #ef4444 40%, transparent);
+}
+
+.my-scores__empty-title {
+  @apply text-base font-semibold;
+}
+
+.my-scores__retry {
+  @apply rounded-lg border px-3 py-1.5 text-sm;
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.spinner {
+  @apply h-6 w-6 rounded-full border-2;
+  border-color: color-mix(in srgb, currentColor 20%, transparent);
+  border-top-color: var(--color-accent, #6366f1);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
+.card-grid {
+  @apply grid list-none gap-4 p-0;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}

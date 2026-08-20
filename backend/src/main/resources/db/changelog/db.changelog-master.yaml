@@ -43,3 +43,7 @@ databaseChangeLog:
       file: db/changelog/changes/020-update-youtube-rank.yaml
   - include:
       file: db/changelog/changes/021-score-document.yaml
+  - include:
+      file: db/changelog/changes/022-guest-uploads.yaml
+  - include:
+      file: db/changelog/changes/023-learner-profile-progress.yaml

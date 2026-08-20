@@ -15,6 +15,8 @@ import {
   type DemoCatalogEntry,
   DemoScoreService,
 } from '../../../core/score/demo-score.service';
+import { UserProfileService } from '../../../core/profile/user-profile.service';
+import { SkillOnboardingComponent } from '../../../onboarding/components/skill-onboarding/skill-onboarding.component';
 import { DemoCardComponent } from '../demo-card/demo-card.component';
 import { HomeHeroComponent } from '../home-hero/home-hero.component';
 
@@ -83,7 +85,7 @@ const HOW_IT_WORKS: readonly HowItWorksStep[] = [
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [RouterLink, DemoCardComponent, HomeHeroComponent],
+  imports: [RouterLink, DemoCardComponent, HomeHeroComponent, SkillOnboardingComponent],
   templateUrl: './home.component.html',
   styleUrl: './home.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -93,6 +95,7 @@ export class HomeComponent {
   private readonly router = inject(Router);
   private readonly demoService = inject(DemoScoreService);
   private readonly title = inject(Title);
+  private readonly profileService = inject(UserProfileService);
   private readonly meta = inject(Meta);
 
   readonly pills = VALUE_PILLS;
@@ -106,7 +109,27 @@ export class HomeComponent {
 
   readonly hasDemos = computed(() => this.demos().length > 0);
 
+  /**
+   * Ask the two skill questions, once.
+   *
+   * Only in the browser, and only once the profile has actually loaded — asking during
+   * SSR would flash the dialog to everyone, and asking before the answer arrives would
+   * show it to someone who answered last week.
+   */
+  private readonly dismissed = signal(false);
+  readonly showOnboarding = computed(
+    () => !this.dismissed() && this.profileService.needsOnboarding(),
+  );
+
+  onOnboardingDone(): void {
+    this.dismissed.set(true);
+  }
+
   constructor() {
+    if (isPlatformBrowser(this.platformId)) {
+      this.profileService.load().subscribe();
+    }
+
     this.title.setTitle('PiLearn — learn any piano piece, step by step');
     this.meta.updateTag({
       name: 'description',

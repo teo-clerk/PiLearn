@@ -146,3 +146,9 @@ scratch/
 !backend/mvnw
 !backend/mvnw.cmd
 !backend/.mvn/wrapper/maven-wrapper.properties
+
+# Local dev process logs and pidfiles (tools/dev-up.sh)
+.dev/
+
+# Local worker virtualenv (tools/dev-up.sh and the runbook create this)
+worker/.venv/

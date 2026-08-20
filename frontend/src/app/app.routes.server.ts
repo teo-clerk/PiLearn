@@ -16,6 +16,9 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'practice/:scoreId', renderMode: RenderMode.Client },
 
   // Upload flow: File/DataTransfer APIs and a live progress stream.
+  // Reads the learner's own library from the browser's guest session, which the
+  // server cannot see — prerendering it would ship an empty list to everyone.
+  { path: 'library/my-scores', renderMode: RenderMode.Client },
   { path: 'import', renderMode: RenderMode.Client },
   { path: 'import/**', renderMode: RenderMode.Client },
 

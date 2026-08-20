@@ -1,7 +1,20 @@
 {
+  "//": [
+    "Dev-server proxy for `npm start`, which is the LOCAL stack.",
+    "",
+    "This used to target https://api.pianoml.org, so the local frontend talked to the",
+    "production API while `npm start` was setting BASE_PATH=http://localhost:8080 —",
+    "the script claimed local and the proxy delivered remote. Any endpoint that only",
+    "existed locally (uploads, profile, library) appeared to be missing.",
+    "",
+    "environment.api is '/api', and requests are built as '/api' + '/api/v1/...', so",
+    "pathRewrite strips the proxy prefix and the backend receives '/api/v1/...'.",
+    "",
+    "To develop against the hosted API instead, use `npm run start-remote`."
+  ],
   "/api": {
-    "target": "https://api.pianoml.org/",
-    "secure": true,
+    "target": "http://localhost:8080",
+    "secure": false,
     "changeOrigin": true,
     "pathRewrite": { "^/api": "" }
   }

@@ -72,6 +72,21 @@ export interface KeyPressEvent {
         />
       }
 
+      <!-- Pitch names, for learners who cannot yet read notation. Drawn near the top
+           of the key so they never collide with the QWERTY hints at the bottom: a
+           beginner on a computer keyboard needs BOTH — which note, and which key. -->
+      @if (showNoteLabels()) {
+        @for (key of layout().keys; track key.midi) {
+          @if (noteLabels().get(key.midi); as name) {
+            <text
+              [attr.x]="key.x + key.width / 2"
+              [attr.y]="key.isBlack ? 18 : 20"
+              [attr.class]="key.isBlack ? 'note-name note-name--black' : 'note-name'"
+            >{{ name }}</text>
+          }
+        }
+      }
+
       <!-- QWERTY hint labels. Rendered after the keys so they paint on top;
            pointer-events are off so they never swallow a press. -->
       @if (showKeyHints()) {
@@ -153,6 +168,19 @@ export interface KeyPressEvent {
       }
 
       .hint--white { fill: #8a8f98; }
+
+      /* Larger and darker than the QWERTY hints: this is what a beginner is actually
+         reading, whereas the hint is a lookup they consult once. */
+      .note-name {
+        font-size: 9px;
+        font-weight: 700;
+        text-anchor: middle;
+        pointer-events: none;
+        user-select: none;
+        fill: #4b5563;
+      }
+
+      .note-name--black { fill: #e5e7eb; }
       .hint--black { fill: #cfd4dc; }
 
       @media (prefers-reduced-motion: reduce) {
@@ -182,6 +210,10 @@ export class VirtualKeyboardComponent {
   /** MIDI note -> QWERTY key label, shown on the keys in computer-keyboard mode. */
   readonly keyHints = input<ReadonlyMap<number, string>>(new Map());
   readonly showKeyHints = input<boolean>(false);
+
+  /** MIDI note -> pitch name ("C4"), for learners still finding the keys. */
+  readonly noteLabels = input<ReadonlyMap<number, string>>(new Map());
+  readonly showNoteLabels = input<boolean>(false);
 
   readonly keyDown = output<KeyPressEvent>();
   readonly keyUp = output<KeyPressEvent>();

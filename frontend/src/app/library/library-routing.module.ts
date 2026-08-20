@@ -9,6 +9,14 @@ export const libraryRouteList: Routes = [
     data: { breadcrumb: 'Browse' }
   },
   {
+    // The learner's OWN scores, as opposed to the shared catalogue the browse views
+    // show. Lazy-loaded and standalone; the rest of this module predates both.
+    path: 'my-scores',
+    loadComponent: () =>
+      import('./components/my-scores/my-scores.component').then(m => m.MyScoresComponent),
+    data: { breadcrumb: 'My scores' }
+  },
+  {
     path: 'genres',
     component: BrowseComponent,
     data: { breadcrumb: 'Browse' }

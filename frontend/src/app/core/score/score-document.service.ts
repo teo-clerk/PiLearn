@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { type Observable, catchError, forkJoin, map, of, shareReplay, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { DemoScoreService } from './demo-score.service';
+import { GuestSessionService } from '../session/guest-session.service';
 import type {
   AlignmentIndex,
   Measure,
@@ -38,6 +39,7 @@ export interface ScoreLoadState {
 export class ScoreDocumentService {
   private readonly http = inject(HttpClient);
   private readonly demo = inject(DemoScoreService);
+  private readonly guestSession = inject(GuestSessionService);
   private readonly baseUrl = environment.api;
 
   private readonly documentCache = new Map<string, Observable<ScoreDocument>>();
@@ -156,9 +158,23 @@ export class ScoreDocumentService {
 
   getRoadmap(
     scoreId: string,
-    options: { revision?: number; goalTempoPct?: number; handsSeparateFirst?: boolean } = {},
+    options: {
+      revision?: number;
+      goalTempoPct?: number;
+      handsSeparateFirst?: boolean;
+      /** Overrides the learner's stored level; omit to use their profile. */
+      skillLevel?: string;
+    } = {},
   ): Observable<Roadmap> {
     const params: Record<string, string> = {};
+    if (options.skillLevel) params['skillLevel'] = options.skillLevel;
+
+    // The backend needs this to find an anonymous visitor's profile — without it,
+    // a guest who answered "never touched a piano" would still be handed the default
+    // intermediate ladder.
+    const sessionId = this.guestSession.sessionId();
+    if (sessionId) params['guestSessionId'] = sessionId;
+
     if (options.revision !== undefined) params['revision'] = String(options.revision);
     if (options.goalTempoPct !== undefined) {
       params['goalTempoPct'] = String(options.goalTempoPct);

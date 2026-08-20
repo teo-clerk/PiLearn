@@ -146,4 +146,13 @@ public class Score {
   @Column(name = "rights", length = 32)
   private String rights = "USER_UPLOAD_PRIVATE";
 
+  /**
+   * Opaque session id for an upload made without an account.
+   *
+   * <p>Null for owned scores. Lets a visitor see their own uploads within a session,
+   * and lets a later sign-up claim them.
+   */
+  @Column(name = "guest_session_id", length = 64)
+  private String guestSessionId;
+
 }

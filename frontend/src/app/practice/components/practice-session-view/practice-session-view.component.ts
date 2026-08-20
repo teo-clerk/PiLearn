@@ -10,9 +10,10 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { HostListener } from '@angular/core';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../account/services/auth.service';
 import type { HandMode } from '../../../core/score/score-document.model';
 import { ScoreDocumentService } from '../../../core/score/score-document.service';
 import { AlignmentCursorService } from '../../services/alignment-cursor.service';
@@ -20,12 +21,17 @@ import { PracticeAudioService } from '../../services/practice-audio.service';
 import { PracticeQwertyService } from '../../services/practice-qwerty.service';
 import { PracticeMidiService } from '../../services/practice-midi.service';
 import { PracticeSessionService } from '../../services/practice-session.service';
+import { WaitGateService } from '../../services/wait-gate.service';
+import { UserProfileService } from '../../../core/profile/user-profile.service';
+import { MyScoresService } from '../../../library/services/my-scores.service';
+import { wantsNoteNames } from '../../../core/profile/user-profile.model';
 import { PracticeHeaderComponent } from '../practice-header/practice-header.component';
 import {
   type ChunkRange,
   ScoreViewerComponent,
 } from '../score-viewer/score-viewer.component';
 import { AttemptSummaryComponent } from '../attempt-summary/attempt-summary.component';
+import { GuestBannerComponent } from '../guest-banner/guest-banner.component';
 import {
   type InputSource,
   InputSourceSelectorComponent,
@@ -34,6 +40,7 @@ import { type HudNote, NoteHudComponent } from '../note-hud/note-hud.component';
 import { PracticeTourComponent } from '../practice-tour/practice-tour.component';
 import { StageGuideComponent } from '../stage-guide/stage-guide.component';
 import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.component';
+import { midiToName } from '../virtual-keyboard/keyboard-geometry';
 
 /**
  * The practice surface.
@@ -53,6 +60,7 @@ import { VirtualKeyboardComponent } from '../virtual-keyboard/virtual-keyboard.c
     ScoreViewerComponent,
     VirtualKeyboardComponent,
     AttemptSummaryComponent,
+    GuestBannerComponent,
     InputSourceSelectorComponent,
     StageGuideComponent,
     NoteHudComponent,
@@ -71,6 +79,9 @@ export class PracticeSessionViewComponent {
   private readonly midi = inject(PracticeMidiService);
   private readonly qwerty = inject(PracticeQwertyService);
   readonly session = inject(PracticeSessionService);
+  private readonly waitGate = inject(WaitGateService);
+  private readonly profileService = inject(UserProfileService);
+  private readonly myScores = inject(MyScoresService);
 
   /** Bound from the route: `/practice/:scoreId`. */
   readonly scoreId = input.required<string>();
@@ -80,6 +91,24 @@ export class PracticeSessionViewComponent {
   readonly isBootstrapping = signal(true);
   readonly bootstrapError = signal<string | null>(null);
   readonly showSummary = signal(false);
+
+  /**
+   * Whether to nudge an anonymous visitor towards an account.
+   *
+   * Shown only once the score has loaded and only until dismissed: the banner exists to
+   * explain what a guest loses (saved progress), not to gate practice on signing up.
+   */
+  private readonly isSignedIn = toSignal(inject(AuthService).isLoggedIn, {
+    initialValue: false,
+  });
+  private readonly guestBannerDismissed = signal(false);
+  readonly showGuestBanner = computed(
+    () => !this.isSignedIn() && !this.guestBannerDismissed(),
+  );
+
+  dismissGuestBanner(): void {
+    this.guestBannerDismissed.set(true);
+  }
 
   /** First-run tour. Suppressed during SSR and for anyone who has already seen it. */
   readonly showTour = signal(!PracticeTourComponent.hasCompleted(inject(PLATFORM_ID)));
@@ -206,6 +235,69 @@ export class PracticeSessionViewComponent {
 
   readonly guideVolumePercent = computed(() => Math.round(this.guideVolume() * 100));
 
+  // ── Beginner aids ──────────────────────────────────────────────────────────
+
+  readonly practiceMode = this.session.practiceMode;
+
+  /** True while the transport is holding for the learner rather than running. */
+  readonly isWaitingForLearner = computed(
+    () => this.practiceMode() === 'WAIT' && this.isPlaying(),
+  );
+
+  /** True on a rhythm stage, where any key counts and pitch is ignored. */
+  readonly isRhythmStage = computed(() => this.practiceMode() === 'RHYTHM');
+
+  /** Notes the learner still owes before the cursor moves, in WAIT mode. */
+  readonly awaitedNotes = this.waitGate.remaining;
+
+  /**
+   * Whether to draw pitch names on the keys.
+   *
+   * Either the stage asks for them, or the learner told us they cannot read notation.
+   * The stage wins on the final run of a beginner ladder, where the labels come off
+   * deliberately — that is the point of the stage.
+   */
+  readonly showNoteNames = computed(() => {
+    const stage = this.session.currentStage()?.stage;
+    if (stage?.showNoteNames) return true;
+    if (stage && !stage.showNoteNames && this.session.roadmap()) return false;
+    return wantsNoteNames(this.profileService.profile());
+  });
+
+  /**
+   * Pitch names for the keys, when the learner needs them.
+   *
+   * Only the keys the current step expects are named. Labelling all 88 turns the
+   * keyboard into a wall of text and buries the one key they are looking for — the
+   * labels exist to answer "where is this note", not "what is every note".
+   */
+  readonly noteLabels = computed<ReadonlyMap<number, string>>(() => {
+    if (!this.showNoteNames()) return new Map<number, string>();
+
+    const labels = new Map<number, string>();
+    for (const midi of this.expectedNotes()) {
+      labels.set(midi, midiToName(midi));
+    }
+    return labels;
+  });
+
+  /** What this stage asks for, in the learner's words. */
+  readonly stageLabel = computed(() => this.session.currentStage()?.stage.label ?? '');
+
+  /** A line of guidance for whatever mode is running. */
+  readonly modeHint = computed(() => {
+    if (this.isRhythmStage()) {
+      return 'Tap any key on the beat — the notes come later.';
+    }
+    if (this.practiceMode() === 'WAIT') {
+      const remaining = this.awaitedNotes().length;
+      return remaining > 1
+        ? 'Play all ' + remaining + ' notes — take as long as you need.'
+        : 'Play the highlighted note — take as long as you need.';
+    }
+    return '';
+  });
+
   constructor() {
     // Load once the route input is available. Bootstrapping in the constructor rather
     // than ngOnInit keeps it out of the SSR path.
@@ -218,6 +310,13 @@ export class PracticeSessionViewComponent {
     effect(() => {
       if (this.midi.hasDevice() && this.inputSource() === 'TOUCH') {
         this.inputSource.set('MIDI');
+      }
+    });
+
+    // WAIT mode has no transport, so nothing else would ever score the attempt.
+    effect(() => {
+      if (this.session.waitChunkComplete() && this.session.isPlaying()) {
+        this.onChunkComplete();
       }
     });
 
@@ -299,8 +398,40 @@ export class PracticeSessionViewComponent {
   private onChunkComplete(): void {
     if (!this.session.isPlaying()) return;
     this.midi.stop();
-    this.session.finishAttempt(this.expectedNoteCountForChunk());
+    const result = this.session.finishAttempt(this.expectedNoteCountForChunk());
     this.showSummary.set(true);
+    this.checkpoint(result.pitchAccuracy);
+  }
+
+  /**
+   * Tell the backend where the learner got to.
+   *
+   * Fire-and-forget, and never on the demo score — 'demo' is not a real score id, and
+   * posting progress against it would 404 on every attempt.
+   *
+   * Called on attempt end and stage change rather than continuously: those are the
+   * moments the answer actually changes, and a checkpoint per note would be a request
+   * per keystroke.
+   */
+  private checkpoint(masteryScore?: number): void {
+    const scoreId = this.scoreId();
+    if (!scoreId || scoreId === 'demo') return;
+
+    const stages = this.session.allStages();
+    if (stages.length === 0) return;
+
+    this.myScores.recordProgress(scoreId, {
+      stageIndex: this.session.currentStage()?.globalIndex ?? 0,
+      chunkOrdinal: this.session.currentChunk()?.ordinal ?? 0,
+      // What they have passed, not where they are standing — the backend keeps the
+      // higher of the two, so a learner revisiting an early bar never loses ground.
+      stagesCompleted: this.session.stageCleared()
+        ? (this.session.currentStage()?.globalIndex ?? 0) + 1
+        : undefined,
+      totalStages: stages.length,
+      tempoPercent: this.session.tempoPercent(),
+      masteryScore,
+    });
   }
 
   restartChunk(): void {
@@ -451,6 +582,7 @@ export class PracticeSessionViewComponent {
   advanceStage(): void {
     this.showSummary.set(false);
     this.session.nextStage();
+    this.checkpoint();
   }
 
   retryStage(): void {

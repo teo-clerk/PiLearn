@@ -44,6 +44,17 @@ export class AlignmentCursorService {
 
   readonly currentMeasure = computed(() => this.currentStep()?.measure_index ?? -1);
 
+  /**
+   * True when there is no step after this one.
+   *
+   * Needed by WAIT mode, which has no transport to tell it the piece has ended: the
+   * learner's last note IS the end, and `next()` is a silent no-op there.
+   */
+  readonly isAtLastStep = computed(() => {
+    const total = this.stepCount();
+    return total > 0 && this.stepIndex() >= total - 1;
+  });
+
   /** Pitches expected at the current step — what the assessment engine scores against. */
   readonly expectedPitches = computed<readonly number[]>(
     () => this.currentStep()?.pitches ?? [],

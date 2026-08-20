@@ -27,6 +27,18 @@ public interface ScoreRepository extends CrudRepository<Score, UUID>, IScoreRepo
   Optional<Score> findScoreByIdAndOwnerAndVersion(UUID uuid, User user, Integer version);
 
   /**
+   * A learner's own uploads, newest first.
+   *
+   * <p>Two finders, not one: every anonymous visitor shares the seeded guest account, so
+   * the guest case must filter on the session id. Listing guest scores by owner alone
+   * would show each visitor everyone else's uploads.
+   */
+  List<Score> findByOwnerIdAndGuestSessionIdIsNullAndDeletedFalseOrderByUpdatedAtDesc(
+      UUID ownerId);
+
+  List<Score> findByGuestSessionIdAndDeletedFalseOrderByUpdatedAtDesc(String guestSessionId);
+
+  /**
    * Incrémente le compteur de lecture (play_count) pour un score donné.
    *
    * @param scoreId L'ID du score

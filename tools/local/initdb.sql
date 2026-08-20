@@ -11,6 +11,11 @@
 -- denote an identifier rather than a string literal, so the statement errored.
 -- ────────────────────────────────────────────────────────────────────────────
 
+-- gen_random_uuid() for any migration or query that needs a server-side id.
+-- Hibernate generates entity ids itself, so nothing depends on this today; it is
+-- here so a migration that wants it does not fail on a fresh database.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE SCHEMA IF NOT EXISTS pianoml;
 
 DO $$
