@@ -122,6 +122,14 @@ not reaching the roadmap generator.
 - [ ] If the score needed review, the review banner is at the top of the surface,
       not buried.
 
+## 4a. Audio permission
+
+- [ ] Before pressing Play, click a piano key. Either you hear it, **or** a
+      **"Click to enable audio"** banner is showing. A silent keyboard with no banner is
+      the failure — it reads as broken software rather than as a permission you can grant.
+- [ ] Click the banner. It disappears and keys sound from then on.
+- [ ] Pressing Play also enables audio, so someone who starts there never sees the banner.
+
 ## 4b. Wait-for-Me and rhythm stages (beginner ladders only)
 
 - [ ] A bar showing the stage name is above the score, e.g. *"Tap the rhythm — any key"*.
@@ -129,6 +137,8 @@ not reaching the roadmap generator.
       "wrong" pitch must not be scored WRONG, because the screen said any key.
 - [ ] The piece is **not** played back during a rhythm stage. Hearing the notes would
       tell the learner nothing about whether they tapped in time.
+- [ ] `Shift`+`L` toggles loop and `Shift`+`G` toggles the guide track. Plain `L` and `G`
+      play notes — both are piano keys, which is why the toggles take Shift.
 - [ ] **Wait-for-Me stage:** the badge reads *"Waiting for you"*. Do nothing for thirty
       seconds — the cursor must **not** move. There is no timer and no deadline.
 - [ ] Play the wrong note. Nothing advances, and nothing is taken away.
@@ -222,4 +232,9 @@ Regressions worth naming explicitly if they reappear:
 | Questionnaire every visit | `onboarded` cleared by a later partial profile update |
 | Same roadmap at every level | profile not reaching the roadmap generator (session id missing) |
 | Cursor moves during Wait-for-Me | the transport was scheduled for a WAIT stage |
+| READY but /document 404s | nothing pulled the worker's output across — see `ScoreStatusController` |
+| Re-uploading a PDF gives an unplayable score | dedup ingested into the first submitter's score |
+| Empty stave on a re-upload | the engraving source was not copied to the new score |
+| "pipeline script exited 1" and nothing else | check the worker log for the captured stderr |
+| Silent keyboard | AudioContext suspended — the "Click to enable audio" banner should be showing |
 | One guest sees another's library | a query scoped by owner without the guest session |

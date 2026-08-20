@@ -33,6 +33,49 @@ export class PlayerAudioService implements OnDestroy {
   ) { }
 
 
+  /**
+   * Whether the browser is currently refusing to make sound.
+   *
+   * Autoplay policy suspends every AudioContext until the page has seen a real user
+   * gesture. Until then the synth accepts notes and plays nothing — which reads as a
+   * broken instrument, not as a permission prompt. The practice surface asks this so it
+   * can say so out loud.
+   *
+   * Reports false before the context exists: nothing is blocked yet, it simply has not
+   * been built, and warning about it would show the banner to everyone on page load.
+   */
+  isAudioBlocked(): boolean {
+    return this.audioContext?.state === 'suspended';
+  }
+
+  /**
+   * Notify when the browser changes its mind about playing audio.
+   *
+   * The context can resume for reasons we never see — a click anywhere on the page, a
+   * tab regaining focus. Without this the "enable audio" banner would stay up after
+   * sound was already working, which is worse than never showing it.
+   *
+   * @returns a function that removes the listener.
+   */
+  onAudioStateChange(listener: () => void): () => void {
+    const context = this.audioContext;
+    if (!context) return () => undefined;
+
+    context.addEventListener('statechange', listener);
+    return () => context.removeEventListener('statechange', listener);
+  }
+
+  /** Resume a suspended context. Must be called from within a user gesture. */
+  async unlock(): Promise<void> {
+    if (!this.spessasynth) {
+      await this.initSoundFont();
+    }
+    if (this.audioContext?.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+    await Tone.start();
+  }
+
   getTransportSeconds(): number {
     return Tone.getTransport().seconds;
   }

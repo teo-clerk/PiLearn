@@ -43,6 +43,7 @@ class ScoreStatusControllerTest {
   @Mock private ScoreDocumentService documentService;
   @Mock private ScoreStorageService storageService;
   @Mock private OmrWorkerClient workerClient;
+  @Mock private ScoreIngestionService ingestionService;
 
   private ScoreStatusController controller;
   private UUID scoreId;
@@ -51,7 +52,7 @@ class ScoreStatusControllerTest {
   @BeforeEach
   void setUp() {
     controller = new ScoreStatusController(
-        scoreRepository, documentService, storageService, workerClient);
+        scoreRepository, documentService, storageService, workerClient, ingestionService);
     scoreId = UUID.randomUUID();
     score = new Score();
     score.setId(scoreId);
@@ -95,6 +96,65 @@ class ScoreStatusControllerTest {
       assertThat(body.warningCount()).isZero();
       // A finished score must not put load on the worker.
       verify(workerClient, never()).getJobStatus(any());
+    }
+
+    @Test
+    @DisplayName("a worker that has finished has its document pulled into our database")
+    void finishedJobIsPulledAcross() {
+      // The worker's output only reaches us when something pulls it. Where the worker
+      // cannot call back, nothing did: polling reached READY, the client opened the
+      // practice surface, and every artefact 404'd because no revision existed.
+      score.setProcessingStatus(ScoreIngestionService.STATUS_RUNNING);
+      score.setOmrJobId("job_1");
+      score.setCurrentRevision(null);
+      when(workerClient.getJobStatus("job_1"))
+          .thenReturn(Optional.of(job("COMPLETED", "VALIDATE", 1.0, 1, 1, List.of())));
+
+      when(ingestionService.ingestCompletedJob(eq("job_1"), eq(scoreId))).thenAnswer(invocation -> {
+        // Stand in for the write the real service performs.
+        score.setCurrentRevision(1);
+        score.setProcessingStatus(ScoreIngestionService.STATUS_COMPLETED);
+        when(documentService.findLatest(scoreId))
+            .thenReturn(Optional.of(document(1, "OK", 1, 1)));
+        return IngestionOutcome.ingested(
+            "job_1", scoreId.toString(), document(1, "OK", 1, 1), false);
+      });
+
+      var body = controller.status(scoreId).getBody();
+
+      verify(ingestionService).ingestCompletedJob("job_1", scoreId);
+      assertThat(body).isNotNull();
+      // READY must mean the document is actually there, not merely that the worker said so.
+      assertThat(body.status()).isEqualTo(ScoreStatusResponse.READY);
+      assertThat(body.revision()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a score already pulled across is not pulled again")
+    void alreadyIngestedIsNotRepulled() {
+      score.setProcessingStatus(ScoreIngestionService.STATUS_COMPLETED);
+      score.setCurrentRevision(1);
+      when(documentService.findLatest(scoreId))
+          .thenReturn(Optional.of(document(1, "OK", 1, 1)));
+
+      controller.status(scoreId);
+
+      verify(ingestionService, never()).ingestCompletedJob(any(), any());
+    }
+
+    @Test
+    @DisplayName("a failed job is never pulled across")
+    void failedJobIsNotPulled() {
+      score.setProcessingStatus(ScoreIngestionService.STATUS_RUNNING);
+      score.setOmrJobId("job_1");
+      when(workerClient.getJobStatus("job_1"))
+          .thenReturn(Optional.of(job("FAILED", "RECOGNISE", 0.5, 1, 0, List.of())));
+
+      var body = controller.status(scoreId).getBody();
+
+      verify(ingestionService, never()).ingestCompletedJob(any(), any());
+      assertThat(body).isNotNull();
+      assertThat(body.status()).isEqualTo(ScoreStatusResponse.FAILED);
     }
 
     @Test

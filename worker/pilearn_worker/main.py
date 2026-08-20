@@ -54,9 +54,107 @@ from pilearn_worker.pipeline.runner import (
     PipelineStage,
     PipelineStatus,
 )
-from pilearn_worker.storage import DocumentStore, ObjectStorage
+from pilearn_worker.parser.document_builder import (
+    BuildOptions,
+    DocumentBuildError,
+    build_document,
+)
+from pilearn_worker.parser.musicxml_parser import parse_musicxml
+from pilearn_worker.storage import DocumentStore, ObjectStorage, derived_key
 
 logger = logging.getLogger(__name__)
+
+
+def _publish_document(state: "AppState", job: Any, result: Any) -> int | None:
+    """Turn the pipeline's MusicXML into the canonical ScoreDocument, and store it.
+
+    This is the strangler seam. The shell pipeline produces an archive of MusicXML and
+    MIDI — the same artefacts the legacy system produced — and everything downstream of
+    here is the new pipeline: parse into a neutral IR, build the document, store it.
+
+    Without this step a job reported COMPLETED while serving no document at all, so a
+    learner polled to READY and then met a 404 on every artefact the practice surface
+    needs. The parser and builder were fully tested the whole time; nothing called them.
+
+    :returns: the revision written, or None when no document could be produced.
+    """
+    if result.archive_path is None or not Path(result.archive_path).is_file():
+        logger.error("job %s completed without an archive; nothing to publish", job.id)
+        return None
+
+    with tempfile.TemporaryDirectory(prefix=f"publish_{job.id}_") as tmp:
+        extract_root = Path(tmp)
+        shutil.unpack_archive(str(result.archive_path), str(extract_root))
+
+        candidates = sorted(extract_root.rglob("*.musicxml"))
+        if not candidates:
+            logger.error("job %s archive has no .musicxml; nothing to publish", job.id)
+            return None
+
+        # The merged score, not a per-page fragment: relieur writes the whole piece to
+        # `<job>.musicxml`, and the per-page files are named `<job>-<n>.musicxml`.
+        merged = next((c for c in candidates if "-" not in c.stem), candidates[0])
+        musicxml_bytes = merged.read_bytes()
+
+        try:
+            raw = parse_musicxml(merged)
+        except Exception as exc:  # noqa: BLE001
+            # Deliberately broad. music21 raises a wide family of its own exceptions
+            # from deep inside parsing, and OMR output is malformed in ways no upstream
+            # author anticipated. A crash here would fail the job with a stack trace and
+            # no error code, which is strictly worse than a named failure.
+            logger.exception("job %s could not parse %s", job.id, merged.name)
+            job.error_code = "PARSE_FAILED"
+            job.error_detail = f"{type(exc).__name__}: {exc}"
+            return None
+
+        revision = state.documents.next_revision(job.score_id)
+
+        try:
+            document = build_document(
+                raw,
+                BuildOptions(
+                    score_id=job.score_id,
+                    revision=revision,
+                    input_hash=job.idempotency_key or "",
+                    page_count=(
+                        result.accounting.source_pages if result.accounting else None
+                    ),
+                ),
+            )
+        except DocumentBuildError as exc:
+            logger.exception("job %s could not build a document", job.id)
+            job.error_code = "DOCUMENT_BUILD_FAILED"
+            job.error_detail = f"{type(exc).__name__}: {exc}"
+            return None
+
+        payload = document.model_dump(mode="json")
+        state.documents.save(job.score_id, revision, payload)
+        state.documents.save_index(job.score_id, revision, payload["alignment"])
+
+        # The engraving source, stored where the backend's /musicxml endpoint looks.
+        # OSMD renders from this; the document carries structure and alignment only.
+        state.storage.put_object(
+            derived_key(job.score_id, revision, "score.musicxml"),
+            musicxml_bytes,
+            "application/vnd.recordare.musicxml+xml",
+        )
+
+        logger.info(
+            "job %s published document revision %d for score %s (%d measures)",
+            job.id, revision, job.score_id, payload["meta"].get("measure_count", 0),
+        )
+        return revision
+
+
+def _tail(text: str, limit: int = 4000) -> str:
+    """The last few KB of script output.
+
+    Bounded because homr prints a progress line per system and a full run can be
+    megabytes; the end is where the traceback is.
+    """
+    text = text.strip()
+    return text if len(text) <= limit else "…\n" + text[-limit:]
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 ALLOWED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".musicxml", ".xml", ".mxl", ".mid", ".midi"}
@@ -513,6 +611,23 @@ async def _run_job(state: WorkerState, job_id: str, source: Path) -> None:
                 job.status = JobStatus.FAILED
                 job.error_code = first_error.code.value if first_error else "PIPELINE_FAILED"
                 job.error_detail = first_error.detail if first_error else "pipeline failed"
+
+                # The script's own output, which is the only thing that says WHY.
+                # Without this a failure reads as "pipeline script exited 1" and the
+                # only way to find the real cause is to re-run the script by hand
+                # inside the container — which is exactly how the relieur dependency
+                # bug stayed hidden through a green test suite.
+                logger.error(
+                    "job %s failed at %s: %s — %s",
+                    job.id,
+                    result.stage_reached.value,
+                    job.error_code,
+                    job.error_detail,
+                )
+                if result.stderr:
+                    logger.error("job %s pipeline stderr:\n%s", job.id, _tail(result.stderr))
+                if result.stdout:
+                    logger.info("job %s pipeline stdout:\n%s", job.id, _tail(result.stdout))
             elif result.status is PipelineStatus.PARTIAL_FAILURE:
                 # Usable, but never presented as complete. A dropped page means missing
                 # measures, and a roadmap built on those teaches the wrong bars.
@@ -527,6 +642,20 @@ async def _run_job(state: WorkerState, job_id: str, source: Path) -> None:
                 job.status = JobStatus.COMPLETED
                 job.progress.percentage = 1.0
                 job.progress.message = "complete"
+
+            if job.status in (JobStatus.COMPLETED, JobStatus.REVIEW_REQUIRED):
+                # Publish for REVIEW_REQUIRED too: a partially recognised score is still
+                # practisable, and withholding the document would make review impossible.
+                revision = _publish_document(state, job, result)
+                if revision is None:
+                    job.status = JobStatus.FAILED
+                    job.error_code = job.error_code or "DOCUMENT_UNAVAILABLE"
+                    job.error_detail = (
+                        job.error_detail
+                        or "the pipeline finished but produced no usable ScoreDocument"
+                    )
+                else:
+                    job.document_revision = revision
 
             job.lease_until = None
             state.job_store.update(job)

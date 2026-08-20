@@ -95,6 +95,64 @@ public class ScoreStorageService {
     return key;
   }
 
+  /**
+   * Copy a derived artefact from one score to another, at the same revision.
+   *
+   * <p>Exists for deduplicated ingestion. The worker keys jobs on file content, so a
+   * second upload of the same PDF reuses the finished job and its artefacts, which are
+   * stored under the FIRST submitter's score id. Without this copy the new score has a
+   * document and an alignment index but no engraving source, and the practice surface
+   * renders an empty stave.
+   *
+   * <p>Copying rather than pointing at the original: the two scores are independent
+   * from here on, and either may be deleted without breaking the other.
+   *
+   * @return true when the artefact was copied or was already present at the target
+   */
+  public boolean copyDerived(UUID fromScoreId, UUID toScoreId, int revision, String name) {
+    if (fromScoreId.equals(toScoreId)) {
+      return true;
+    }
+    String targetKey = derivedKey(toScoreId, revision, name);
+    if (exists(targetKey)) {
+      return true;
+    }
+
+    Optional<byte[]> source = getDerived(fromScoreId, revision, name);
+    if (source.isEmpty()) {
+      log.warn("nothing to copy at {}", derivedKey(fromScoreId, revision, name));
+      return false;
+    }
+
+    try {
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketName)
+              .key(targetKey)
+              .contentType(contentTypeFor(name))
+              .build(),
+          RequestBody.fromBytes(source.get()));
+    } catch (S3Exception e) {
+      throw new ScoreStorageException("could not copy to " + targetKey, e);
+    }
+
+    log.info("copied {} to {}", derivedKey(fromScoreId, revision, name), targetKey);
+    return true;
+  }
+
+  private String contentTypeFor(String name) {
+    if (name.endsWith(".musicxml") || name.endsWith(".xml")) {
+      return "application/vnd.recordare.musicxml+xml";
+    }
+    if (name.endsWith(".json")) {
+      return "application/json";
+    }
+    if (name.endsWith(".mid") || name.endsWith(".midi")) {
+      return "audio/midi";
+    }
+    return "application/octet-stream";
+  }
+
   /** Read a derived artefact. Empty when it has not been produced yet. */
   public Optional<byte[]> getDerived(UUID scoreId, int revision, String name) {
     String key = derivedKey(scoreId, revision, name);

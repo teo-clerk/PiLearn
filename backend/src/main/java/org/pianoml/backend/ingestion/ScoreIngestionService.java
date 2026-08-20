@@ -1,10 +1,15 @@
 package org.pianoml.backend.ingestion;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.pianoml.backend.document.InvalidScoreDocumentException;
 import org.pianoml.backend.document.ScoreDocumentEntity;
 import org.pianoml.backend.document.ScoreDocumentService;
+import org.pianoml.backend.storage.ScoreStorageService;
 import org.pianoml.backend.entity.Score;
 import org.pianoml.backend.omr.OmrJobStatus;
 import org.pianoml.backend.omr.OmrWorkerClient;
@@ -46,7 +51,9 @@ public class ScoreIngestionService {
 
   private final OmrWorkerClient workerClient;
   private final ScoreDocumentService documentService;
+  private final ObjectMapper objectMapper;
   private final ScoreRepository scoreRepository;
+  private final ScoreStorageService storageService;
 
   /** Values written to {@code score.processing_status}. */
   public static final String STATUS_NONE = "NONE";
@@ -67,6 +74,24 @@ public class ScoreIngestionService {
    */
   @Transactional
   public IngestionOutcome ingestCompletedJob(String jobId) {
+    return ingestCompletedJob(jobId, null);
+  }
+
+  /**
+   * Ingest a finished OMR job into a specific score.
+   *
+   * <p>{@code targetScoreId} exists because of deduplication. The worker keys jobs on file
+   * content, so a second upload of the same PDF — a re-upload, or two learners with the
+   * same public-domain edition — is answered with the ALREADY-FINISHED job, which echoes
+   * back the FIRST submitter's scoreId. Trusting that field ingests the document into
+   * someone else's score and leaves the actual uploader with a score that reports READY
+   * and serves nothing.
+   *
+   * <p>Our own mapping is the authority on who a job belongs to; the worker's scoreId is
+   * only ever a hint.
+   */
+  @Transactional
+  public IngestionOutcome ingestCompletedJob(String jobId, UUID targetScoreId) {
     Optional<OmrJobStatus> maybeStatus = workerClient.getJobStatus(jobId);
     if (maybeStatus.isEmpty()) {
       log.warn("ingestion requested for unknown job {}", jobId);
@@ -83,12 +108,16 @@ public class ScoreIngestionService {
     }
 
     UUID scoreId;
-    try {
-      scoreId = UUID.fromString(status.scoreId());
-    } catch (IllegalArgumentException e) {
-      log.error("job {} carries an unparseable scoreId '{}'", jobId, status.scoreId());
-      return IngestionOutcome.failed(jobId, status.scoreId(), "INVALID_SCORE_ID",
-          "scoreId is not a UUID: " + status.scoreId());
+    if (targetScoreId != null) {
+      scoreId = targetScoreId;
+    } else {
+      try {
+        scoreId = UUID.fromString(status.scoreId());
+      } catch (IllegalArgumentException e) {
+        log.error("job {} carries an unparseable scoreId '{}'", jobId, status.scoreId());
+        return IngestionOutcome.failed(jobId, status.scoreId(), "INVALID_SCORE_ID",
+            "scoreId is not a UUID: " + status.scoreId());
+      }
     }
 
     Optional<Score> maybeScore = scoreRepository.findById(scoreId);
@@ -125,7 +154,20 @@ public class ScoreIngestionService {
 
     ScoreDocumentEntity saved;
     try {
-      saved = documentService.save(scoreId, maybeDocument.get(), null);
+      // The document embeds its alignment index; lifting it into its own column is
+      // what makes GET /document/index work. Passing null here meant that endpoint
+      //404'd for every score ever ingested, and the practice cursor's hot path had to
+      // pull the whole multi-hundred-KB document instead.
+      // On the dedup path the worker's document names the FIRST submitter's score.
+      // Storing it verbatim under a different id leaves a document that disagrees with
+      // the row holding it — so the id is rewritten to match its new owner.
+      String documentJson = retargetScoreId(maybeDocument.get(), scoreId);
+      saved = documentService.save(scoreId, documentJson, extractAlignment(documentJson));
+
+      // On the dedup path the engraving source also lives under the first submitter's
+      // id. Without this copy the score has a document and an index but no MusicXML,
+      // and the practice surface renders an empty stave.
+      copyEngravingSource(status.scoreId(), scoreId, saved.getRevision());
     } catch (InvalidScoreDocumentException e) {
       // The document contradicted itself — e.g. claimed OK while dropping pages. Better
       // to record a failure than to persist something that will mislead a learner.
@@ -174,6 +216,82 @@ public class ScoreIngestionService {
 
   /** Reflect in-flight progress so the library can show it without calling the worker. */
   @Transactional
+  /**
+   * Bring the MusicXML across when this score reused another's finished job.
+   *
+   * <p>Never fatal. The document is the thing practice is built on; a missing engraving
+   * source degrades rendering, and failing the whole ingestion over it would turn a
+   * degraded score into no score at all.
+   */
+  private void copyEngravingSource(String workerScoreId, UUID scoreId, int revision) {
+    UUID sourceId;
+    try {
+      sourceId = UUID.fromString(workerScoreId);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      return;
+    }
+    if (sourceId.equals(scoreId)) {
+      return;
+    }
+
+    try {
+      if (!storageService.copyDerived(sourceId, scoreId, revision, "score.musicxml")) {
+        log.warn("score {} has no engraving source; it will render without a stave", scoreId);
+      }
+    } catch (RuntimeException e) {
+      log.warn("could not copy the engraving source for score {}: {}", scoreId, e.getMessage());
+    }
+  }
+
+  /**
+   * Rewrite the document's own {@code score_id} so it matches the row storing it.
+   *
+   * <p>Only ever corrects a field that is present and wrong. A document without the
+   * field is left exactly as it is — the job here is to stop a document contradicting
+   * its own row, not to add structure the producer chose not to emit.
+   *
+   * <p>Returns the input unchanged when it cannot be parsed: a document that is
+   * otherwise valid should not be rejected over one field, and the caller validates it
+   * separately.
+   */
+  private String retargetScoreId(String documentJson, UUID scoreId) {
+    try {
+      JsonNode root = objectMapper.readTree(documentJson);
+      if (!(root instanceof ObjectNode object)) {
+        return documentJson;
+      }
+      JsonNode existing = root.path("score_id");
+      if (!existing.isTextual() || scoreId.toString().equals(existing.asText())) {
+        return documentJson;
+      }
+      object.put("score_id", scoreId.toString());
+      return objectMapper.writeValueAsString(object);
+    } catch (JsonProcessingException e) {
+      log.warn("could not retarget the document's score_id: {}", e.getMessage());
+      return documentJson;
+    }
+  }
+
+  /**
+   * Pull the alignment index out of the document.
+   *
+   * <p>Returns null when it cannot be found — the index is an optimisation, and a score
+   * with a document but no extracted index is still fully playable from the document
+   * itself. Failing the whole ingestion over it would be a poor trade.
+   */
+  private String extractAlignment(String documentJson) {
+    try {
+      JsonNode alignment = objectMapper.readTree(documentJson).path("alignment");
+      return alignment.isMissingNode() || alignment.isNull()
+          ? null
+          : objectMapper.writeValueAsString(alignment);
+    } catch (JsonProcessingException e) {
+      log.warn("could not extract the alignment index; serving the document only: {}",
+          e.getMessage());
+      return null;
+    }
+  }
+
   public void markRunning(UUID scoreId) {
     scoreRepository.findById(scoreId).ifPresent(score -> {
       score.setProcessingStatus(STATUS_RUNNING);

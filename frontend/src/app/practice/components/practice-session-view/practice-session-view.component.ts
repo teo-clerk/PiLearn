@@ -220,6 +220,14 @@ export class PracticeSessionViewComponent {
   readonly lastVerdict = computed(() => this.midi.lastEvent()?.verdict ?? null);
   readonly lastDeviationMs = computed(() => this.midi.lastEvent()?.deviationMs ?? 0);
 
+  /**
+   * Whether the browser is refusing to make sound.
+   *
+   * Shown as a banner rather than left to be discovered: a silent instrument reads as
+   * broken software, and the learner has no way to guess that the fix is one click.
+   */
+  readonly audioBlocked = this.audio.audioBlocked;
+
   readonly guideTrackEnabled = this.audio.guideTrackEnabled;
   readonly guideVolume = this.audio.guideVolume;
   readonly isCountingIn = this.audio.isCountingIn;
@@ -367,8 +375,16 @@ export class PracticeSessionViewComponent {
 
   // ── Transport ──────────────────────────────────────────────────────────────
 
+  /** Enable audio from an explicit click, and start playing straight away. */
+  enableAudio(): void {
+    void this.audio.unlock();
+  }
+
   start(): void {
     this.showSummary.set(false);
+    // Play is a user gesture; take it as permission rather than starting a transport
+    // into a suspended context and producing silence.
+    void this.audio.unlock();
     this.session.startAttempt();
     this.midi.start();
     void this.audio.startChunk(() => this.onChunkComplete());
@@ -489,8 +505,13 @@ export class PracticeSessionViewComponent {
   /**
    * Transport keyboard shortcuts.
    *
-   * Ignored while a text field has focus, so typing a search term does not restart
-   * the chunk. Space is intercepted to stop the page scrolling under the surface.
+   * Ignored while a text field has focus, so typing a search term does not restart the
+   * chunk. Space is intercepted to stop the page scrolling under the surface.
+   *
+   * `L` and `G` are also piano keys (D and G) in the QWERTY mapping, so they are bound
+   * with Shift. Without it, a learner using the computer keyboard as their instrument
+   * could never toggle loop or the guide track — the note would swallow the keystroke,
+   * silently. Space and R are unambiguous because neither is a piano key.
    */
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
@@ -501,10 +522,9 @@ export class PracticeSessionViewComponent {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-    // QWERTY piano gets first refusal. Its map deliberately excludes R, L and G so the
-    // two never contend for the same keystroke, but letting it decide keeps that
-    // contract in one place rather than duplicated here.
-    if (this.qwerty.handleKeyDown(event)) {
+    // Shift means "this is a command, not a note", which is what lets L and G stay
+    // bound to loop and guide even though both are piano keys.
+    if (!event.shiftKey && this.qwerty.handleKeyDown(event)) {
       event.preventDefault();
       return;
     }
@@ -519,10 +539,12 @@ export class PracticeSessionViewComponent {
         this.restartChunk();
         break;
       case 'KeyL':
+        if (!event.shiftKey && this.qwerty.isEnabled()) break;
         event.preventDefault();
         this.toggleLoop();
         break;
       case 'KeyG':
+        if (!event.shiftKey && this.qwerty.isEnabled()) break;
         if (this.guideAvailable()) {
           event.preventDefault();
           this.toggleGuideTrack();

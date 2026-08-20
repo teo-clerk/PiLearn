@@ -50,11 +50,23 @@ export class PracticeAudioService {
   private readonly isReadyState = signal(false);
   private readonly isCountingInState = signal(false);
 
+  /**
+   * Whether the browser is still refusing to make sound.
+   *
+   * Polled rather than derived, because an AudioContext's state changes outside Angular
+   * — the browser flips it on the first real gesture and tells nobody. A signal that
+   * only updated when we happened to look would leave the "enable audio" banner up
+   * after audio was already working.
+   */
+  private readonly audioBlockedState = signal(false);
+  private detachStateListener?: () => void;
+
   readonly guideTrackEnabled = this.guideTrackState.asReadonly();
   readonly guideVolume = this.guideVolumeState.asReadonly();
   readonly beat = this.beatState.asReadonly();
   readonly isReady = this.isReadyState.asReadonly();
   readonly isCountingIn = this.isCountingInState.asReadonly();
+  readonly audioBlocked = this.audioBlockedState.asReadonly();
 
   /** Monotonic beat counter for the header pulse. */
   readonly beatPulse = computed(() => this.beatState()?.index ?? 0);
@@ -86,6 +98,31 @@ export class PracticeAudioService {
     if (this.isReadyState()) return;
     await this.audio.initSoundFont();
     this.isReadyState.set(true);
+    this.refreshAudioBlocked();
+
+    // The context exists only now, so this is the first moment a listener can attach.
+    this.detachStateListener?.();
+    this.detachStateListener = this.audio.onAudioStateChange(
+      () => this.refreshAudioBlocked(),
+    );
+  }
+
+  /**
+   * Let the browser make sound. Must be called from inside a user gesture.
+   *
+   * Every transport entry point calls this, so a learner who presses Play never sees
+   * the banner at all — it exists for the one who clicks a piano key first and would
+   * otherwise meet a silent instrument.
+   */
+  async unlock(): Promise<void> {
+    await this.audio.unlock();
+    this.isReadyState.set(true);
+    this.refreshAudioBlocked();
+  }
+
+  /** Re-read the context state. Cheap, and the only way to notice an external change. */
+  refreshAudioBlocked(): void {
+    this.audioBlockedState.set(this.audio.isAudioBlocked());
   }
 
   /**
@@ -160,6 +197,13 @@ export class PracticeAudioService {
    */
   playLearnerNote(midi: number, velocity = 88): void {
     if (!this.isReadyState()) return;
+
+    // Pressing a key IS a user gesture, so this is a legitimate moment to unlock. A
+    // learner who explores the keyboard before pressing Play should hear it.
+    if (this.audioBlockedState()) {
+      void this.unlock();
+    }
+
     this.audio.playLearnerNote(midi, velocity);
   }
 

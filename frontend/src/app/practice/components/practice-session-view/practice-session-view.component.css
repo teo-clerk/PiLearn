@@ -165,3 +165,45 @@
   font-weight: 700;
   white-space: nowrap;
 }
+
+
+/* ── Audio permission gate ───────────────────────────────────────────────────
+   Deliberately a full-width button rather than a dismissible notice: the whole
+   surface is useless while it is showing, and the fix is the click itself. */
+.audio-gate {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.audio-gate:hover {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+}
+
+.audio-gate__icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.audio-gate__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.875rem;
+}
+
+.audio-gate__text strong {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-gate { transition: none; }
+}

@@ -1,5 +1,6 @@
 package org.pianoml.backend.ingestion;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,6 +16,7 @@ import org.pianoml.backend.entity.Score;
 import org.pianoml.backend.omr.OmrJobStatus;
 import org.pianoml.backend.omr.OmrWorkerClient;
 import org.pianoml.backend.repository.ScoreRepository;
+import org.pianoml.backend.storage.ScoreStorageService;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +24,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 /**
@@ -39,6 +43,7 @@ class ScoreIngestionServiceTest {
   @Mock private OmrWorkerClient workerClient;
   @Mock private ScoreDocumentService documentService;
   @Mock private ScoreRepository scoreRepository;
+  @Mock private ScoreStorageService storageService;
 
   private ScoreIngestionService service;
   private UUID scoreId;
@@ -47,9 +52,14 @@ class ScoreIngestionServiceTest {
   private static final String JOB_ID = "job_abc123";
   private static final String DOCUMENT_JSON = "{\"schema_version\":\"1.0\"}";
 
+  /** A document carrying an alignment index, as the worker actually emits. */
+  private static final String DOCUMENT_WITH_ALIGNMENT =
+      "{\"schema_version\":\"1.0\",\"alignment\":{\"steps\":[{\"index\":0}]}}";
+
   @BeforeEach
   void setUp() {
-    service = new ScoreIngestionService(workerClient, documentService, scoreRepository);
+    service = new ScoreIngestionService(
+        workerClient, documentService, new ObjectMapper(), scoreRepository, storageService);
     scoreId = UUID.randomUUID();
     score = new Score();
     score.setId(scoreId);
@@ -284,6 +294,141 @@ class ScoreIngestionServiceTest {
       assertThat(outcome.errorCode()).isEqualTo("NO_PAGES_RECOGNISED");
       assertThat(score.getProcessingStatus()).isEqualTo(ScoreIngestionService.STATUS_FAILED);
       verify(documentService, never()).save(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a deduplicated job ingests into the score that asked, not the first one")
+    void deduplicatedJobIngestsIntoTheAskingScore() {
+      // The worker keys jobs on file content, so a re-upload — or two learners with the
+      // same public-domain edition — is answered with the already-finished job, which
+      // echoes back the FIRST submitter's scoreId. Trusting that field leaves this
+      // uploader with a score that reports READY and serves nothing.
+      UUID otherScoreId = UUID.randomUUID();
+      Score mine = new Score();
+      mine.setId(otherScoreId);
+      mine.setTitle("My copy");
+      mine.setOmrJobId(JOB_ID);
+
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(otherScoreId)).thenReturn(Optional.of(mine));
+      when(workerClient.fetchDocument(any(), any()))
+          .thenReturn(Optional.of(DOCUMENT_WITH_ALIGNMENT));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+
+      IngestionOutcome outcome = service.ingestCompletedJob(JOB_ID, otherScoreId);
+
+      assertThat(outcome.isFailure()).isFalse();
+      // Saved against the caller's score, never the one the worker named.
+      verify(documentService).save(eq(otherScoreId), any(), any());
+      verify(scoreRepository, never()).findById(scoreId);
+    }
+
+    @Test
+    @DisplayName("a deduplicated score gets its own copy of the engraving source")
+    void deduplicatedScoreCopiesMusicXml() {
+      // Without this the score has a document and an index but no MusicXML, and the
+      // practice surface renders an empty stave.
+      UUID otherScoreId = UUID.randomUUID();
+      Score mine = new Score();
+      mine.setId(otherScoreId);
+      mine.setOmrJobId(JOB_ID);
+
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(otherScoreId)).thenReturn(Optional.of(mine));
+      when(workerClient.fetchDocument(any(), any()))
+          .thenReturn(Optional.of(DOCUMENT_WITH_ALIGNMENT));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+      when(storageService.copyDerived(any(), any(), anyInt(), any())).thenReturn(true);
+
+      service.ingestCompletedJob(JOB_ID, otherScoreId);
+
+      verify(storageService).copyDerived(scoreId, otherScoreId, 1, "score.musicxml");
+    }
+
+    @Test
+    @DisplayName("a missing engraving source degrades the score rather than failing it")
+    void missingEngravingSourceIsNotFatal() {
+      UUID otherScoreId = UUID.randomUUID();
+      Score mine = new Score();
+      mine.setId(otherScoreId);
+      mine.setOmrJobId(JOB_ID);
+
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(otherScoreId)).thenReturn(Optional.of(mine));
+      when(workerClient.fetchDocument(any(), any()))
+          .thenReturn(Optional.of(DOCUMENT_WITH_ALIGNMENT));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+      when(storageService.copyDerived(any(), any(), anyInt(), any()))
+          .thenThrow(new RuntimeException("storage is down"));
+
+      // The document is what practice is built on. A degraded score beats no score.
+      IngestionOutcome outcome = service.ingestCompletedJob(JOB_ID, otherScoreId);
+
+      assertThat(outcome.isFailure()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a document stored under a new score is retargeted to name that score")
+    void documentScoreIdIsRetargeted() {
+      // Otherwise the document disagrees with the row holding it.
+      UUID otherScoreId = UUID.randomUUID();
+      Score mine = new Score();
+      mine.setId(otherScoreId);
+      mine.setOmrJobId(JOB_ID);
+
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(otherScoreId)).thenReturn(Optional.of(mine));
+      when(workerClient.fetchDocument(any(), any())).thenReturn(Optional.of(
+          "{\"schema_version\":\"1.0\",\"score_id\":\"" + scoreId + "\"}"));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+
+      service.ingestCompletedJob(JOB_ID, otherScoreId);
+
+      ArgumentCaptor<String> document = ArgumentCaptor.forClass(String.class);
+      verify(documentService).save(eq(otherScoreId), document.capture(), any());
+      assertThat(document.getValue()).contains(otherScoreId.toString());
+      assertThat(document.getValue()).doesNotContain(scoreId.toString());
+    }
+
+    @Test
+    @DisplayName("the alignment index is lifted out of the document into its own column")
+    void alignmentIndexIsExtracted() {
+      // The cursor's hot path reads GET /document/index. Passing null here meant that
+      // endpoint 404'd for every score ever ingested, and the practice surface had to
+      // pull the whole multi-hundred-KB document on every load instead.
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(scoreId)).thenReturn(Optional.of(score));
+      when(workerClient.fetchDocument(any(), any()))
+          .thenReturn(Optional.of(DOCUMENT_WITH_ALIGNMENT));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+
+      service.ingestCompletedJob(JOB_ID);
+
+      ArgumentCaptor<String> alignment = ArgumentCaptor.forClass(String.class);
+      verify(documentService).save(eq(scoreId), eq(DOCUMENT_WITH_ALIGNMENT), alignment.capture());
+      assertThat(alignment.getValue()).contains("steps");
+    }
+
+    @Test
+    @DisplayName("a document with no alignment index still ingests")
+    void missingAlignmentIsNotFatal() {
+      // The index is an optimisation. A score with a document but no extracted index is
+      // still fully playable, so failing the ingestion over it would be a poor trade.
+      when(workerClient.getJobStatus(JOB_ID))
+          .thenReturn(Optional.of(status("COMPLETED", 1, 1, List.of())));
+      when(scoreRepository.findById(scoreId)).thenReturn(Optional.of(score));
+      when(workerClient.fetchDocument(any(), any())).thenReturn(Optional.of(DOCUMENT_JSON));
+      when(documentService.save(any(), any(), any())).thenReturn(savedEntity(1, "OK", 1, 1));
+
+      IngestionOutcome outcome = service.ingestCompletedJob(JOB_ID);
+
+      assertThat(outcome.isFailure()).isFalse();
+      verify(documentService).save(eq(scoreId), eq(DOCUMENT_JSON), isNull());
     }
 
     @Test

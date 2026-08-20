@@ -43,6 +43,7 @@ public class ScoreStatusController {
   private final ScoreDocumentService documentService;
   private final ScoreStorageService storageService;
   private final OmrWorkerClient workerClient;
+  private final ScoreIngestionService ingestionService;
 
   /**
    * Current ingestion state.
@@ -52,7 +53,6 @@ public class ScoreStatusController {
    * on the pipeline for no reason.
    */
   @GetMapping("/{scoreId}/status")
-  @Transactional(readOnly = true)
   public ResponseEntity<ScoreStatusResponse> status(@PathVariable UUID scoreId) {
     Score score = findScore(scoreId);
     String stored = score.getProcessingStatus() == null
@@ -81,7 +81,33 @@ public class ScoreStatusController {
     if (jobId != null) {
       Optional<OmrJobStatus> live = workerClient.getJobStatus(jobId);
       if (live.isPresent()) {
-        return ResponseEntity.ok(fromWorker(scoreId, live.get()));
+        OmrJobStatus job = live.get();
+
+        // The worker has finished, but its output only reaches our database when
+        // something pulls it across. In deployments where the worker cannot call back,
+        // nothing did — so polling reached READY, the client navigated to the practice
+        // surface, and every artefact 404'd. Pulling here closes the loop using the
+        // same idempotent path as the callback.
+        if (job.isTerminal() && !"FAILED".equals(job.status())
+            && score.getCurrentRevision() == null) {
+          // Pass the score explicitly: on the dedup path the worker echoes back the
+          // first submitter's id, and ingesting into that would leave this uploader
+          // with a score that reports READY and serves nothing.
+          IngestionOutcome outcome = ingestionService.ingestCompletedJob(jobId, scoreId);
+          if (outcome.kind() == IngestionOutcome.Kind.FAILED) {
+            log.warn(
+                "could not pull the finished document for score {} (job {}): {} — {}",
+                scoreId, jobId, outcome.errorCode(), outcome.errorDetail());
+          }
+          // Re-read: the pull just wrote the revision the client needs.
+          score = findScore(scoreId);
+          document = documentService.findLatest(scoreId);
+          if (score.getCurrentRevision() != null) {
+            return ResponseEntity.ok(terminal(score, document));
+          }
+        }
+
+        return ResponseEntity.ok(fromWorker(scoreId, job));
       }
       log.debug("worker did not answer for job {}; reporting stored status {}", jobId, stored);
     }

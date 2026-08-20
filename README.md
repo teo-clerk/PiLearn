@@ -4,282 +4,270 @@
 
 **Turn a sheet-music PDF into a practice plan you can actually follow.**
 
-Upload a score. PiLearn recognises it, analyses its difficulty measure by measure, and generates
-a progressive roadmap — hands separate, phrase by phrase, tempo ramping — then listens to your
-MIDI keyboard and adapts as you play.
+Upload a score. PiLearn reads the notes, works out how hard each bar is, and builds a
+step-by-step roadmap around *your* level — starting, if you have never played before, with
+tapping the rhythm and finding one key at a time.
+
+Then it listens while you play.
 
 </div>
 
 ---
 
-## What it does
+## What it is
 
-A pianist with a PDF of a piece they want to learn opens it, plays badly from bar 1, gets stuck
-at bar 34, and loses momentum. PiLearn turns that PDF into a **plan**: what to practise, in what
-order, at what tempo, with which hand, until which criterion is met.
+An adaptive piano-learning assistant. It takes raw sheet music and turns it into an interactive
+practice session that meets the learner where they are.
 
-```
-  ┌────────┐   ┌───────────┐   ┌──────────────┐   ┌──────────┐   ┌────────────┐
-  │  PDF   │──►│ Multi-    │──►│  Canonical   │──►│ Practice │──►│ Assessment │
-  │ upload │   │ engine    │   │ ScoreDocument│   │ Roadmap  │   │  Engine    │
-  └────────┘   │ OMR       │   └──────────────┘   └──────────┘   └────────────┘
-               │ homr +    │    measures, hands,   chunks,        live MIDI,
-               │ Audiveris │    key/time, tempo,   stages,        note-level
-               │ arbiter   │    alignment index,   tempo ramp,    feedback,
-               └───────────┘    difficulty         mastery gates  adaptation
-```
+The core claim is the one most piano software skips: **a complete beginner and an intermediate
+player do not need the same plan at different speeds — they need different plans.** Someone who
+has never touched a piano is not slow at playing the piece; they cannot yet read the notes, find
+the keys, or hold a pulse. So they get a different ladder, not a gentler one.
 
-**Core capabilities**
+### Practice modes
 
-- **PDF sheet ingestion** — 300 dpi rasterisation → OMR → MusicXML → normalised MIDI, with a
-  per-measure confidence report and a human review gate when recognition is uncertain
-- **Learning pathway generator** — phrase-aware chunking, hands-separate → hands-together
-  ladders, difficulty-derived starting tempo, mastery criteria, cascading join stages
-- **Interactive practice** — engraved score with a tracking cursor, falling-notes view, virtual
-  keyboard, wait-for-hand mode, metronome, chunk looping
-- **Live assessment** — note-level correct / early / late / wrong / missed, rushing-and-dragging
-  detection, per-measure error attribution
-- **Adaptive re-planning** — tempo step-downs, chunk splitting, extra hands-separate work for a
-  lagging hand, spaced review of mastered material
+| Mode | What it does | Who it is for |
+|---|---|---|
+| **Rhythm tapping** | Any key counts as a hit. Pitch is ignored entirely. | The first thing a total novice can succeed at — one new skill instead of two. |
+| **Wait-for-Me** | The transport stops at each note and waits, indefinitely, until you play it. No timer, no deadline. | Anyone still hunting for the keys. A cursor that walks away mid-search turns learning into failure. |
+| **Hands separate** | One hand at a time, with the engine playing the other as accompaniment. | Hearing the piece whole before you can play it whole. |
+| **Tempo ramp** | 40% → 60% → 80% → 100% for beginners; finer multiplicative rungs for players who can already hold a tempo. | Building speed without losing accuracy. |
 
-Also carried forward: a browsable score library with MusicBrainz enrichment, automatic fingering
-generation, harmonic analysis, and a scale/chord/arpeggio exercise generator.
+### The ladder adapts
+
+Four skill levels, set by a two-question questionnaire on first visit. On the same 11-bar Chopin
+prelude:
+
+| Level | Practice units | Stages | Shape of the plan |
+|---|---|---|---|
+| `BEGINNER_0` | 13 × 1 bar | 104 | Rhythm warm-up → wait-for-me with note names → accompaniment → 40/60/80/100 → whole piece |
+| `BEGINNER_1` | 2 bars | 28 | Wait-for-me with note names → 40/60/80/100 |
+| `INTERMEDIATE` | 4-bar phrases | 15 | Wait-for-me → in time → fine tempo ramp |
+| `ADVANCED` | 4-bar phrases | 11 | Straight to hands together, then tempo |
+
+### Playing it
+
+Three input paths, all equal citizens — the same scoring, the same audio, the same highlighting:
+
+- **WebMIDI** — a real instrument, if you have one
+- **QWERTY** — your computer keyboard as a two-octave piano
+- **Touch / click** — the on-screen SVG keyboard, with pitch names drawn on the keys you need
 
 ---
 
-## Architecture
+## How it works
 
 ```
-┌───────────────────────────────────────────────────────────────────────────┐
-│  Frontend — Angular 21 (standalone, signals, zoneless), SSR via Express   │
-│                                                                           │
-│  Surfaces   library · upload · review · plan · practice · progress        │
-│  Engines    OpenSheetMusicDisplay (engraving + cursor)                    │
-│             Tone.js (transport) · SpessaSynth (SoundFont synthesis)       │
-│             WebMIDI (keyboard I/O) · canvas piano roll                    │
-│  State      per-domain signal stores; no NgRx                             │
-│  API client generated from openapi/api.yaml                               │
-└──────────────────────────────┬────────────────────────────────────────────┘
-                               │ REST + SSE
-┌──────────────────────────────┴────────────────────────────────────────────┐
-│  Backend — Spring Boot 3.5 / Java 21                                      │
-│                                                                           │
-│  catalog     scores, authors, genres, MusicBrainz enrichment              │
-│  ingestion   job queue, confidence gate, storage                          │
-│  learning    chunking · stage ladder · adaptation      ← the Pedagogy Engine
-│  practice    sessions · attempts · progress · mastery                     │
-│  security    JWT auth, ownership and rights enforcement                   │
-└──────┬──────────────────────────────────────────┬─────────────────────────┘
-       │ PostgreSQL 16                            │ queue
-       │  catalog + score_document +              │
-       │  learning_plan + attempts +              ▼
-       │  measure_result + chunk_mastery    ┌────────────────────────────────┐
-       ▼                                    │  OMR Worker — FastAPI / Python │
-  S3-compatible object storage              │                                │
-   MinIO locally · Cloudflare R2 in prod    │  pdftoppm → homr | Audiveris   │
-   raw/     immutable originals             │  → relieur merge               │
-   derived/ musicxml, midi, document.json,  │  → MuseScore3 normalise        │
-            index.json, confidence.json     │  → music21 / partitura analyse │
-                                            │  → pianoplayer fingering       │
-                                            │  → difficulty + alignment      │
-                                            └────────────────────────────────┘
+   sheet music PDF
+         │
+         ▼
+┌────────────────────┐   homr (OMR) → relieur (merge) → MuseScore
+│  FastAPI OMR       │   one long CPU-bound subprocess per job
+│  worker  :8000     │   Redis-backed job state, leased and idempotent
+└────────┬───────────┘
+         │  parse (music21) → neutral IR → build
+         ▼
+┌───────────────────────────────────────────────────┐
+│  Canonical ScoreDocument  +  MusicXML             │
+│                                                   │
+│  notes · measures · hands · segments · chunks     │
+│  alignment index (tick ⇄ second ⇄ cursor step)    │
+│  difficulty per bar · confidence per page         │
+└────────┬──────────────────────────────────────────┘
+         │  JSONB in Postgres, artefacts in S3/MinIO
+         ▼
+┌────────────────────┐   ChunkPlanner  — what to practise, in what size
+│  Spring Boot       │   StageLadder   — what to do with each piece
+│  backend  :8080    │   both driven by the learner's skill profile
+└────────┬───────────┘
+         │  roadmap · document · alignment index · musicxml
+         ▼
+┌────────────────────────────────────────────────────┐
+│  Angular practice surface  :4200                   │
+│                                                    │
+│  OSMD score  ·  Tone.js transport  ·  WebMIDI in   │
+│  SVG keyboard  ·  wait-gate  ·  live scoring       │
+└────────────────────────────────────────────────────┘
 ```
 
-### Data flow
-
-**PDF → Multi-engine OMR → `ScoreDocument` → Practice Roadmap → Assessment Engine**
-
-The `ScoreDocument` is the canonical representation: measures, notes with hand assignment,
-key/time signatures, tempo map, resolved playback order (repeats and voltas unrolled), a
-precomputed notation↔MIDI **alignment index**, and per-measure difficulty vectors. Everything
-downstream — engraving, playback, planning, scoring — reads from it, so no surface re-parses
-the score and no two surfaces can disagree.
-
-Alignment is computed **once, server-side, at ingestion**. The client does an `O(1)` lookup per
-cursor advance.
-
-Full detail: [`docs/DATA_PIPELINE.md`](docs/DATA_PIPELINE.md).
-
-### Tech stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Angular 21 · TypeScript 5.9 · Tailwind 4 · Vite |
-| Engraving | OpenSheetMusicDisplay 1.9 |
-| Audio | Tone.js 15 · spessasynth_lib 4 (SoundFont, AudioWorklet) |
-| MIDI | `@tonejs/midi` · WebMIDI |
-| Backend | Spring Boot 3.5 · Java 21 · JPA · Liquibase |
-| Database | PostgreSQL 16 |
-| Storage | S3-compatible (MinIO local · Cloudflare R2 prod) |
-| OMR worker | Python 3.11 · FastAPI · homr · Audiveris · MuseScore 3 |
-| Analysis | music21 · partitura · pianoplayer · piano-syllabus-classifier |
-| API contract | OpenAPI 3 → generated client and server interfaces |
-| Testing | Vitest · Playwright · JUnit 5 · Testcontainers |
+**Why the document sits in the middle.** The worker owns everything that needs music theory —
+parsing, phrase detection, hand assignment, difficulty. The backend owns pedagogy. Neither
+reaches into the other; they meet at one versioned, immutable JSON document. A revision is never
+overwritten, because a learner's saved progress may already point at it.
 
 ---
 
 ## Quickstart
 
-### Prerequisites
-
-| Tool | Version | Notes |
-|---|---|---|
-| Docker | 24+ with Compose v2 | Postgres, MinIO, OMR toolchain |
-| Node.js | 22 LTS | frontend |
-| Java | 21 (Temurin) | backend |
-| Maven | 3.9+ | backend build |
-| Python | 3.11 | worker and harness tooling |
-| `pdfinfo` | poppler-utils | optional, for fixture inspection on the host |
-
-### 1. Configure
-
 ```bash
-git clone <repo-url> PiLearn && cd PiLearn
-cp .env.example .env
+cp .env.example .env          # then fill in the REQUIRED values (see below)
+./tools/dev-up.sh --backend-in-docker
 ```
 
-Fill in `.env`. At minimum:
+That checks your ports and prerequisites, starts Postgres, MinIO, Redis, the OMR worker and the
+backend, brings up the Angular dev server, and prints every URL. First run builds the OMR image
+(~6 GB, 20–40 min); later runs take about two minutes, which is the recognition model loading.
 
-```bash
-# Required — the app refuses to start without a real signing key.
-openssl rand -base64 64 | tr -d '\n'     # paste into JWT_SECRET
-
-DB_PASSWORD=<choose one>
-STORAGE_ACCESS_KEY=<choose one>
-STORAGE_SECRET_KEY=<choose one, 8+ chars>
-```
-
-Every key is documented in [`.env.example`](.env.example). `.env` is gitignored — never commit
-a filled-in copy.
-
-### 2. Start everything
-
-```bash
-tools/dev-up.sh
-```
-
-Checks prerequisites and ports, brings up Postgres, MinIO (with its bucket), Redis and the
-OMR worker, starts the backend and the Angular dev server, then prints every URL and log
-command. `tools/dev-down.sh` stops it all again.
-
-| Flag | Effect |
+| Where | What |
 |---|---|
-| `--infra-only` | containers only — run the backend and frontend yourself (steps 3 and 4) |
-| `--no-worker` | skip the 6 GB OMR image; uploads fail, everything else works |
-| `--backend-in-docker` | run Spring in a container instead of on the host |
-
-Already running Postgres on 5432? Set `DB_PORT` in `.env` (and match `DB_URL`) instead of
-stopping it. `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `REDIS_PORT`, `WORKER_PORT` and
-`BACKEND_PORT` work the same way.
-
-Steps 3–5 below are the manual equivalents, for when you want one piece at a time.
-
-### 2b. Start infrastructure only
+| <http://localhost:4200/> | Home — drag a PDF onto the hero panel |
+| <http://localhost:4200/library/my-scores> | Your library, with progress and *Resume practice* |
+| <http://localhost:4200/practice/demo> | Demo sandbox — no backend needed |
+| <http://localhost:8080/api/v1> | Backend API |
+| <http://localhost:8010/docs> | OMR worker API |
+| <http://localhost:9001> | MinIO console |
 
 ```bash
-docker compose up -d          # postgres + minio + bucket creation
-docker compose ps             # both should report healthy
+./tools/dev-down.sh            # stop everything, keep your data
+./tools/dev-down.sh --volumes  # ...and destroy the database and all uploads
 ```
 
-- MinIO console → http://localhost:9001
-- Postgres → `localhost:5432`, database `pianoml`
-
-### 3. Run the backend
+<details>
+<summary><b>Required <code>.env</code> values</b></summary>
 
 ```bash
-cd backend
-set -a && source ../.env && set +a
-mvn spring-boot:run -Dspring-boot.run.profiles=local
+JWT_SECRET=            # openssl rand -base64 64 | tr -d '\n'   — min 64 chars
+DB_PASSWORD=           # any local value
+STORAGE_ACCESS_KEY=    # any local value
+STORAGE_SECRET_KEY=    # any local value, 8+ chars
 ```
 
-Liquibase applies the schema on first boot.
+Every key is documented in [`.env.example`](.env.example). `.env` is gitignored — never commit a
+filled-in copy.
 
-- API → http://localhost:8080
-- Swagger UI → http://localhost:8080/swagger-ui.html
+Already running Postgres on 5432? Set `DB_PORT` (and match `DB_URL`) rather than stopping it.
+`MINIO_PORT`, `REDIS_PORT`, `WORKER_PORT` and `BACKEND_PORT` work the same way.
 
-### 4. Run the frontend
+</details>
+
+<details>
+<summary><b>Running pieces individually</b></summary>
 
 ```bash
-cd frontend
-npm ci
-npm start                     # generates the API client, then serves on :4200
+./tools/dev-up.sh --infra-only   # containers only; run the app yourself
+./tools/dev-up.sh --no-worker    # skip the 6 GB OMR image (uploads will fail)
+
+cd backend  && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+cd frontend && npm ci && npm start
 ```
 
-Open http://localhost:4200. The dev server proxies `/api` to the backend per
-`proxy.conf.json`; `npm run start-remote` targets the hosted API instead.
+`npm start` proxies `/api` to `http://localhost:8080`. Use `npm run start-remote` to develop
+against the hosted API instead.
 
-### 5. (Optional) OMR toolchain
-
-Only needed when working on ingestion or running the baseline harness. The first build pulls
-CPU-only PyTorch, MuseScore 3 and homr — **20–40 minutes, ~6 GB**.
-
-```bash
-docker compose --profile omr up -d --build
-```
-
-### 6. Check it actually works
-
-Compiling is not the same as working. Walk the upload → practice path in a real browser
-using [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md). No account is needed — anonymous
-uploads are attached to a guest session.
+</details>
 
 ---
 
-## Common tasks
+## Controls
+
+### Transport
+
+| Key | Action |
+|---|---|
+| `Space` | Play / pause |
+| `R` | Restart the current chunk |
+| `Shift` + `L` | Toggle loop |
+| `Shift` + `G` | Toggle the guide track (hands-separate stages only) |
+
+`L` and `G` need **Shift** because both are also piano keys. Without it, a learner using the
+computer keyboard as their instrument could never reach the toggles — the note would swallow the
+keystroke, silently.
+
+### QWERTY piano
+
+Two octaves, laid out the way an online piano is: naturals on the home row, accidentals sitting
+above the note they raise.
+
+```text
+  W   E       T   Y   U       O   P
+  C♯  D♯      F♯  G♯  A♯      C♯  D♯
+
+A   S   D   F   G   H   J   K   L   ;
+C   D   E   F   G   A   B   C   D   E
+
+  Z  or  [   octave down          X  or  ]   octave up
+```
+
+Default octave is C4 (middle C); the range runs C2–C6.
+
+### On-screen keyboard
+
+Click or touch any key. When the stage calls for it — or you told us you cannot read notation —
+the pitch names (`C4`, `G3`) are drawn on **only the keys the current step expects**, so the one
+you are looking for is not buried under eighty-seven others.
+
+---
+
+## Testing
 
 ```bash
 # Frontend
-npm start                     # dev server (regenerates the API client first)
-npm test                      # unit tests
-npm run build:prod            # production build
-npx playwright test           # e2e
+cd frontend
+npx tsc --noEmit -p tsconfig.app.json
+npx ng build
+CHROME_BIN=$(which chromium) npx ng test --watch=false --browsers=ChromeHeadless
 
 # Backend
-mvn verify                    # compile + test + JaCoCo coverage
-mvn test -Dtest=ScoreServiceTest
-mvn spring-boot:run -Dspring-boot.run.profiles=local
+cd backend
+./mvnw -B clean verify
 
-# API contract — edit openapi/api.yaml, then regenerate BOTH sides
-cd frontend && npm run generate:api
-cd backend  && mvn generate-sources
-
-# OMR baseline harness
-./tools/omr-baseline/run-baseline.sh --check
+# Worker  (needs Python 3.11 or 3.12 — the package pins <3.13)
+cd worker
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest tests -q
 ```
 
-> **Never hand-edit the generated API client** (`frontend/src/app/core/api/`). Change
-> `openapi/api.yaml` and regenerate. It is gitignored for exactly this reason.
+Compiling is not the same as working. For the browser walkthrough — upload a real PDF, watch it
+ingest, play it — follow [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md).
+
+### Ingesting a real score from the command line
+
+```bash
+SID="guest_$(openssl rand -hex 12)"
+
+SCORE=$(curl -s -F "file=@Scores/Frédéric Chopin - Prelude in E Minor.pdf" \
+             -F "title=Prelude in E Minor" -F "composer=Frédéric Chopin" \
+             -F "guestSessionId=$SID" \
+             http://localhost:8080/api/v1/scores/upload | jq -r .scoreId)
+
+# QUEUED → PROCESSING → READY. Polling is also what pulls the finished
+# document across from the worker, so keep polling until it settles.
+until curl -s "http://localhost:8080/api/v1/scores/$SCORE/status" \
+      | grep -qE '"status":"(READY|REVIEW_REQUIRED|FAILED)"'; do sleep 10; done
+
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/document"       | jq .meta
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/document/index" | jq '.steps | length'
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/musicxml"       | head -3
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/roadmap?skillLevel=BEGINNER_0" | jq .totalStages
+```
+
+No account needed at any point — anonymous uploads are attached to a guest session that lives in
+your browser, and signing up later is what makes the library durable.
 
 ---
 
 ## Project layout
 
 ```
-PiLearn/
-├── frontend/            Angular 21 SPA + SSR
-│   └── src/app/
-│       ├── desktop/     practice surface — player, cursor, keyboard, OSMD
-│       ├── library/     score browsing and detail
-│       ├── import/      upload and ingestion flow
-│       ├── exercises/   scale / chord / arpeggio generator
-│       ├── account/     auth and ownership
-│       └── shared/      cross-cutting services and components
-├── backend/             Spring Boot API
-│   ├── src/main/java/org/pianoml/backend/
-│   │   ├── controller/  REST endpoints (OpenAPI-generated interfaces)
-│   │   ├── service/     domain logic
-│   │   ├── repository/  JPA + custom queries
-│   │   ├── entity/      persistence model
-│   │   └── security/    JWT
-│   ├── src/main/resources/db/changelog/   Liquibase
-│   ├── scripts/         legacy OMR shell pipeline (being replaced in Phase 2)
-│   └── Dockerfile       OMR toolchain image
-├── openapi/api.yaml     the API contract — single source of truth
-├── tools/
-│   ├── local/           local infra bootstrap
-│   └── omr-baseline/    OMR regression + accuracy harness
-├── docs/                architecture and planning
-└── docker-compose.yml   local development stack
+backend/     Spring Boot 3.5 · Java 21 · Postgres · Liquibase
+  identity/    who is asking (account, or guest session)
+  learning/    ChunkPlanner, StageLadderBuilder — the pedagogy engine
+  profile/     skill level, notation fluency, preferred input
+  library/     the learner's own scores and their progress
+  ingestion/   upload, status, and the strangler seam to the worker
+
+worker/      FastAPI · music21 · homr — everything needing music theory
+  parser/      MusicXML → neutral IR → canonical ScoreDocument
+  pedagogy/    hand detection, per-bar difficulty
+  pipeline/    job runner, page accounting, confidence gate
+
+frontend/    Angular 21 standalone · signals · OSMD · Tone.js
+  core/        score documents, profile, guest session
+  practice/    the practice surface, wait-gate, transport, inputs
+  library/     my-scores and the shared catalogue
+
+tools/       dev-up.sh, dev-down.sh, OMR baseline harness
+Scores/      local test fixtures (private; not distributed)
 ```
 
 ---
@@ -288,42 +276,42 @@ PiLearn/
 
 | Document | What it covers |
 |---|---|
-| [`docs/AUDIT_AND_REFACTOR.md`](docs/AUDIT_AND_REFACTOR.md) | Codebase audit: what survives the pivot, what gets deleted, every known defect, and the ordered cleanup strategy |
-| [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | Target features, user flows, the learning model (chunking, stage ladders, adaptation), system architecture, and every technology decision with its rationale |
-| [`docs/DATA_PIPELINE.md`](docs/DATA_PIPELINE.md) | The P0–P9 ingestion stages, the `ScoreDocument` schema, job orchestration, persistence model, and pipeline testing strategy |
-| [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md) | Five phases, ~130 tasks with IDs, estimates, definitions of done, dependency graph, and schedule risks |
-| [`docs/PHASE0_SETUP.md`](docs/PHASE0_SETUP.md) | Repository lockdown runbook: gitignore, secret externalization, git initialization |
-| [`tools/omr-baseline/README.md`](tools/omr-baseline/README.md) | How to measure OMR quality before and after the Phase 2 migration |
+| [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md) | The browser walkthrough: upload → ingest → practise, and what each step must show |
+| [`docs/LOCAL_DEV_RUNBOOK.md`](docs/LOCAL_DEV_RUNBOOK.md) | Running the stack piece by piece, and what to check when a piece misbehaves |
+| [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | Target features, user flows, the learning model, and every technology decision with its rationale |
+| [`docs/DATA_PIPELINE.md`](docs/DATA_PIPELINE.md) | Ingestion stages, the `ScoreDocument` schema, job orchestration, persistence |
+| [`docs/AUDIT_AND_REFACTOR.md`](docs/AUDIT_AND_REFACTOR.md) | Codebase audit: what survives the pivot, what goes, every known defect |
+| [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md) | Five phases, ~130 tasks with IDs, estimates and dependencies |
+| [`tools/omr-baseline/README.md`](tools/omr-baseline/README.md) | Measuring OMR quality before and after a toolchain bump |
 
 ---
 
-## Project status
+## Status
 
-PiLearn is a pivot of **PianoML**, a working piano-practice application. The ingestion pipeline,
-score renderer, playback engine and MIDI assessment core are inherited and functional. The
-Pedagogy & Roadmap Engine is being built on top.
+PiLearn is a pivot of **PianoML**, a working piano-practice application.
 
-| Phase | Scope | Status |
-|---|---|---|
-| **0** | Repository lockdown, secret externalization, baseline harness | **in progress** |
-| **1** | Teardown: dead-code removal, CI, test infrastructure | planned |
-| **2** | Typed ingestion worker, `ScoreDocument`, confidence gate | planned |
-| **3** | Pedagogy engine: chunking, stages, adaptation, telemetry | planned |
-| **4** | Practice UI rebuild, falling notes, review gate | planned |
-| **5** | Accessibility, performance, migration, launch hardening | planned |
+| Area | State |
+|---|---|
+| Ingestion — PDF → ScoreDocument + MusicXML | working end to end on real scores |
+| Adaptive roadmap — four skill levels | working, verified per level |
+| Practice surface — wait-for-me, rhythm, hands separate, tempo ramp | implemented; covered by unit tests |
+| Profile, onboarding, my-scores library | working, guest-aware |
+| Accounts, sharing, deployment hardening | not started |
 
-Track progress against the task IDs in
-[`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md).
+**Read this before trusting it:** the practice surface has been driven by tests and by API-level
+verification, not yet by a person at a keyboard for a full session. The known gaps are listed at
+the top of [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md). Toolchain pins in
+`worker/Dockerfile` move recognition quality when bumped — re-run the baseline harness after any
+change there.
 
 ---
 
 ## Contributing
 
-- **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/):
-  `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
-- **Tests first.** Coverage floor is 80 % on ingestion, learning, alignment and difficulty modules.
+- **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/).
+- **Tests first.** 80% floor on ingestion, learning, alignment and difficulty.
 - **Size limits.** Components ≤ 300 LOC, services ≤ 400 LOC, files ≤ 800 LOC hard cap.
-- **No secrets in source**, ever. CI fails the build on a detected secret.
+- **No secrets in source**, ever.
 - **No `any`.** State is replaced, never mutated in place.
 - Changing the API means editing `openapi/api.yaml` and regenerating both sides.
 
@@ -331,16 +319,17 @@ Track progress against the task IDs in
 
 ## Browser support
 
-The practice surface needs **WebMIDI**, which is Chromium-only today.
+The practice surface needs **WebMIDI** for instrument input, which is Chromium-only today.
+Everything else — including the QWERTY and touch keyboards — works everywhere.
 
-| Browser | Playback & follow-along | MIDI input & scoring |
+| Browser | Score, playback, QWERTY & touch | MIDI instrument input |
 |---|---|---|
 | Chrome / Edge / Brave 120+ | yes | yes |
 | Firefox | yes | no |
 | Safari | yes | no |
 
-Non-Chromium browsers get a degraded mode: score display, playback and cursor tracking work;
-scoring is disabled with an explicit notice.
+Browsers suspend audio until the page has seen a real click, so the practice surface shows a
+**Click to enable audio** banner rather than presenting a silent instrument.
 
 ---
 
@@ -348,5 +337,5 @@ scoring is disabled with an explicit notice.
 
 See [`frontend/LICENSE.md`](frontend/LICENSE.md).
 
-Sheet music you upload remains yours. Uploaded scores are **private to your account by default**
-and are never published without an explicit rights declaration.
+Sheet music you upload remains yours. Uploaded scores are **private by default** and are never
+published without an explicit rights declaration.

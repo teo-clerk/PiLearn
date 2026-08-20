@@ -70,9 +70,17 @@ RUN git clone https://github.com/liebharc/homr.git \
     && poetry run python -c "from homr.main import main; import sys; sys.argv=['homr','--init']; main()" \
     && rm -rf /home/appuser/homr/.git
 
+# Installed into shared-venv, NOT via `poetry install`.
+#
+# pdf2pack.sh runs relieur as `~/shared-venv/bin/python ./relieur/relieur/relieur.py`,
+# so its dependencies have to be in THAT interpreter. `poetry install` put them in a
+# poetry-managed venv nothing ever used, and every real ingestion died at the page-merge
+# step with `ModuleNotFoundError: No module named 'musicxml'` — after homr had already
+# done the expensive work.
 RUN git clone https://github.com/piano-ml/relieur.git \
     && cd relieur && git checkout "${RELIEUR_SHA}" \
-    && poetry install \
+    && /home/appuser/shared-venv/bin/pip install --no-cache-dir . \
+    && /home/appuser/shared-venv/bin/python -c "import musicxml" \
     && rm -rf /home/appuser/relieur/.git
 
 RUN git clone https://github.com/marcomusy/pianoplayer.git \

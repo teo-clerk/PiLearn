@@ -15,6 +15,19 @@
       />
     }
 
+    <!-- Browsers suspend every AudioContext until the page has seen a real gesture.
+         Until then the synth accepts notes and plays nothing, which reads as a broken
+         instrument rather than as a permission the learner can grant. -->
+    @if (audioBlocked()) {
+      <button type="button" class="audio-gate" (click)="enableAudio()">
+        <span class="audio-gate__icon" aria-hidden="true">🔈</span>
+        <span class="audio-gate__text">
+          <strong>Click to enable audio</strong>
+          Your browser blocks sound until you interact with the page.
+        </span>
+      </button>
+    }
+
     <!-- What this stage is asking for. A beginner ladder has stages that differ in
          kind, not just tempo, so "which stage am I on" is not answerable from the
          transport alone. -->

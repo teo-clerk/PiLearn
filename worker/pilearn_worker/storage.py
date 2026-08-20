@@ -185,6 +185,17 @@ class DocumentStore:
             "application/json",
         )
 
+    def next_revision(self, score_id: str) -> int:
+        """The revision a new document should be written as.
+
+        Revisions start at 1 and only ever increase. A re-ingestion writes a NEW
+        revision rather than overwriting the old one: an existing document may already
+        be referenced by a learner's saved progress, and silently changing the bars
+        under them would invalidate it.
+        """
+        current = self._latest_revision(score_id)
+        return 1 if current is None else current + 1
+
     def _latest_revision(self, score_id: str) -> int | None:
         try:
             payload = self._storage.get_object(f"derived/{score_id}/latest.json")
