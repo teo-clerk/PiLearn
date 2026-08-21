@@ -13,7 +13,6 @@ Then it listens while you play.
 </div>
 
 ---
-
 ## What it is
 
 An adaptive piano-learning assistant. It takes raw sheet music and turns it into an interactive
@@ -55,7 +54,265 @@ Three input paths, all equal citizens — the same scoring, the same audio, the 
 
 ---
 
-## How it works
+## The idea in one minute
+
+PiLearn turns a PDF into a **roadmap**: an ordered list of small things to practise, built
+around how much piano you already have.
+
+Four words are worth knowing, because the whole app is made of them:
+
+| Term | What it means |
+|---|---|
+| **Document** | What your PDF becomes: every note, its bar, which hand plays it, how hard that bar is, and how notation lines up with clock time. Everything else is built from this. |
+| **Chunk** | A slice of the piece you practise as one unit. One bar for a complete beginner, a four-bar phrase for someone who already plays. |
+| **Stage** | One objective within a chunk — *"right hand, no rush"*, *"both hands at 60%"*. Stages have a pass mark, so the app knows when you have got it. |
+| **Roadmap** | Every chunk and its stages, in order. Your plan for the piece. |
+
+So an 11-bar Chopin prelude becomes **13 chunks and 104 stages** for someone who has never
+played, and **2 chunks and 11 stages** for someone who has. Same piece, same document —
+different plan, because the two learners are stuck on completely different things.
+
+---
+
+## Setup
+
+### 1. What you need
+
+| | Needed for | Notes |
+|---|---|---|
+| **Docker** + Compose plugin | everything | The one hard requirement. `docker info` must work. |
+| **~8 GB free disk** | the OMR engine | The recognition image is ~5.4 GB, the backend ~840 MB. |
+| **Node 20+** | the web app | Always, unless you use `--infra-only`. The web app runs on your machine. |
+| **JDK 21** | the backend | Only without `--backend-in-docker`, which runs it in a container instead. |
+| **Python 3.11 or 3.12** | worker tests | Only for running the worker's test suite. The app itself uses the container. |
+
+`tools/dev-up.sh` checks all of this before it starts anything, and tells you exactly what is
+missing rather than failing halfway.
+
+### 2. Configure
+
+```bash
+cp .env.example .env
+```
+
+Then fill in four values — any local value will do for three of them:
+
+```bash
+JWT_SECRET=            # openssl rand -base64 64 | tr -d '\n'   — must be 64+ chars
+DB_PASSWORD=           # anything
+STORAGE_ACCESS_KEY=    # anything
+STORAGE_SECRET_KEY=    # anything, 8+ characters
+```
+
+Every key is documented in [`.env.example`](.env.example). `.env` is gitignored — never commit
+a filled-in copy.
+
+> **Already running Postgres on 5432?** Set `DB_PORT` in `.env` (and match `DB_URL`) instead of
+> stopping it. `MINIO_PORT`, `REDIS_PORT`, `WORKER_PORT` and `BACKEND_PORT` work the same way.
+
+### 3. Start
+
+```bash
+./tools/dev-up.sh --backend-in-docker
+```
+
+This checks your ports and prerequisites, starts Postgres, MinIO, Redis, the recognition worker
+and the backend, launches the web app, and prints every URL when it is done.
+
+**The first run builds the recognition image: ~6 GB and 20–40 minutes.** Later runs take about
+two minutes, which is mostly the recognition model loading. In a hurry, `--no-worker` skips it —
+everything works except uploading new scores.
+
+| URL | What |
+|---|---|
+| <http://localhost:4200/> | Home — where you drop a PDF |
+| <http://localhost:4200/practice/demo> | Demo sandbox — works with no backend at all |
+| <http://localhost:4200/library/my-scores> | Your scores and your progress |
+| <http://localhost:8080/api/v1> | Backend API |
+| <http://localhost:8000/docs> | Worker API (interactive) |
+| <http://localhost:9001> | MinIO console — the stored files |
+
+```bash
+./tools/dev-down.sh            # stop everything, keep your data
+./tools/dev-down.sh --volumes  # ...and delete the database and every upload
+```
+
+<details>
+<summary><b>Running the pieces separately</b></summary>
+
+```bash
+./tools/dev-up.sh --infra-only   # containers only; you run the app yourself
+
+cd backend  && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+cd frontend && npm ci && npm start
+```
+
+`npm start` proxies `/api` to `http://localhost:8080`. Use `npm run start-remote` to develop
+against the hosted API instead.
+
+Logs, when something is quiet:
+
+```bash
+tail -f .dev/logs/backend.log
+tail -f .dev/logs/frontend.log
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f worker
+```
+
+</details>
+
+---
+
+## Using it
+
+### Try it in thirty seconds
+
+Open <http://localhost:4200/practice/demo>. That is a real practice session on a built-in
+score — no upload, no account, no backend. Press <kbd>Space</kbd> and play along on your
+computer keyboard. It is the fastest way to see whether any of this is for you.
+
+### The actual flow
+
+**1 · Answer two questions.** On your first visit you are asked how much piano you have played
+and whether you read sheet music. That is the whole questionnaire, and it is skippable. Your
+answers decide how finely your pieces get sliced and which practice modes you get.
+
+**2 · Drop a PDF on the home page.** Any sheet music. No account needed — anonymous uploads are
+tied to a guest session stored in your browser.
+
+> **Guest uploads live in that one browser.** Clearing site data loses them, and signing up does
+> not currently adopt them — moving a guest's scores into a new account is built for but not yet
+> implemented.
+
+**3 · Wait for it to be read.** Recognition takes anywhere from twenty seconds to a few minutes
+depending on length. You will watch it move through *uploading → recognising → analysing →
+planning*. When it is done the app takes you straight to the practice surface.
+
+> If a page cannot be read, the score still opens and says so. A partially recognised piece is
+> still worth practising; it just tells you which bars to distrust.
+
+**4 · Practise.** The surface shows the score, a keyboard, and a bar naming what this stage is
+asking of you. What you get depends on your answers:
+
+- *Never played?* You start by **tapping the rhythm** — any key counts, pitch is ignored. Then
+  one bar at a time in **Wait-for-Me**, where nothing moves until you play the right note, with
+  the note names drawn on the keys you need.
+- *Already play?* You start hands-together on four-bar phrases and spend your time on tempo.
+
+Play with a MIDI keyboard, your computer keyboard, or by clicking the on-screen one. All three
+score identically.
+
+**5 · Come back to it.** <http://localhost:4200/library/my-scores> lists everything you have
+uploaded with your progress through it. **Resume practice** drops you back on the exact stage and
+tempo you left.
+
+### Controls
+
+| Key | Action |
+|---|---|
+| <kbd>Space</kbd> | Play / pause |
+| <kbd>R</kbd> | Restart the current chunk |
+| <kbd>Shift</kbd> + <kbd>L</kbd> | Toggle loop |
+| <kbd>Shift</kbd> + <kbd>G</kbd> | Toggle the guide track (hands-separate stages only) |
+
+<kbd>L</kbd> and <kbd>G</kbd> need <kbd>Shift</kbd> because both are also piano keys. Without it,
+anyone using the computer keyboard as their instrument could never reach the toggles — the note
+would swallow the keystroke, silently.
+
+#### Computer keyboard as a piano
+
+Two octaves, laid out the way an online piano is: naturals on the home row, accidentals sitting
+above the note they raise.
+
+```text
+  W   E       T   Y   U       O   P
+  C♯  D♯      F♯  G♯  A♯      C♯  D♯
+
+A   S   D   F   G   H   J   K   L   ;
+C   D   E   F   G   A   B   C   D   E
+
+  Z  or  [   octave down          X  or  ]   octave up
+```
+
+Starts at C4 (middle C); the range runs C2–C6.
+
+#### On-screen keyboard
+
+Click or touch any key. When the stage calls for it — or you said you cannot read notation — the
+pitch names (`C4`, `G3`) are drawn on **only the keys the current step expects**, so the one you
+are looking for is not buried under eighty-seven others.
+
+---
+
+## When something goes wrong
+
+| What you see | What it usually is |
+|---|---|
+| `dev-up.sh` refuses to start, naming a port | Something else holds it. Stop it, or set that port in `.env` (see Setup). |
+| The keyboard makes no sound | Your browser blocks audio until you interact with the page. Click the **"Click to enable audio"** banner. |
+| Upload says *"simulated"* | The web app cannot reach the backend. Check `tail -f .dev/logs/backend.log`. |
+| Upload fails, or the score never leaves *queued* | The recognition worker is not running. Start it, or check `docker compose ... logs -f worker`. |
+| A score reaches READY but the page is blank | Keep the status page open a moment — reaching READY is also what pulls the finished score across. If it persists, check the backend log. |
+| `/api/...` returns 404 in the browser | The dev proxy is pointing at the hosted API. `proxy.conf.json` should target `http://localhost:8080`. |
+| Everything is stale after a code change | `./tools/dev-down.sh && ./tools/dev-up.sh --backend-in-docker` |
+
+For the full walkthrough with checkboxes — what each screen must show, and what it means when it
+doesn't — see [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md).
+
+---
+
+## Working on it
+
+### Tests
+
+```bash
+# Frontend
+cd frontend
+npx tsc --noEmit -p tsconfig.app.json
+npx ng build
+CHROME_BIN=$(which chromium) npx ng test --watch=false --browsers=ChromeHeadless
+
+# Backend
+cd backend
+./mvnw -B clean verify
+
+# Worker  (Python 3.11 or 3.12 — the package pins <3.13)
+cd worker
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest tests -q
+```
+
+Compiling is not the same as working. Before believing a change, walk the browser checklist in
+[`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md).
+
+### Driving the API directly
+
+Useful when you are changing ingestion and do not want to click through the UI:
+
+```bash
+SID="guest_$(openssl rand -hex 12)"
+
+SCORE=$(curl -s -F "file=@Scores/Frédéric Chopin - Prelude in E Minor.pdf" \
+             -F "title=Prelude in E Minor" -F "composer=Frédéric Chopin" \
+             -F "guestSessionId=$SID" \
+             http://localhost:8080/api/v1/scores/upload | jq -r .scoreId)
+
+# QUEUED → PROCESSING → READY. Polling is also what pulls the finished score
+# across from the worker, so keep polling until it settles.
+until curl -s "http://localhost:8080/api/v1/scores/$SCORE/status" \
+      | grep -qE '"status":"(READY|REVIEW_REQUIRED|FAILED)"'; do sleep 10; done
+
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/document"       | jq .meta
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/document/index" | jq '.steps | length'
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/musicxml"       | head -3
+curl -s "http://localhost:8080/api/v1/scores/$SCORE/roadmap?skillLevel=BEGINNER_0" | jq .totalStages
+```
+
+Swap `skillLevel` between `BEGINNER_0`, `BEGINNER_1`, `INTERMEDIATE` and `ADVANCED` to watch the
+same piece produce four different plans.
+
+---
+
+## How it works inside
 
 ```
    sheet music PDF
@@ -94,155 +351,6 @@ Three input paths, all equal citizens — the same scoring, the same audio, the 
 parsing, phrase detection, hand assignment, difficulty. The backend owns pedagogy. Neither
 reaches into the other; they meet at one versioned, immutable JSON document. A revision is never
 overwritten, because a learner's saved progress may already point at it.
-
----
-
-## Quickstart
-
-```bash
-cp .env.example .env          # then fill in the REQUIRED values (see below)
-./tools/dev-up.sh --backend-in-docker
-```
-
-That checks your ports and prerequisites, starts Postgres, MinIO, Redis, the OMR worker and the
-backend, brings up the Angular dev server, and prints every URL. First run builds the OMR image
-(~6 GB, 20–40 min); later runs take about two minutes, which is the recognition model loading.
-
-| Where | What |
-|---|---|
-| <http://localhost:4200/> | Home — drag a PDF onto the hero panel |
-| <http://localhost:4200/library/my-scores> | Your library, with progress and *Resume practice* |
-| <http://localhost:4200/practice/demo> | Demo sandbox — no backend needed |
-| <http://localhost:8080/api/v1> | Backend API |
-| <http://localhost:8010/docs> | OMR worker API |
-| <http://localhost:9001> | MinIO console |
-
-```bash
-./tools/dev-down.sh            # stop everything, keep your data
-./tools/dev-down.sh --volumes  # ...and destroy the database and all uploads
-```
-
-<details>
-<summary><b>Required <code>.env</code> values</b></summary>
-
-```bash
-JWT_SECRET=            # openssl rand -base64 64 | tr -d '\n'   — min 64 chars
-DB_PASSWORD=           # any local value
-STORAGE_ACCESS_KEY=    # any local value
-STORAGE_SECRET_KEY=    # any local value, 8+ chars
-```
-
-Every key is documented in [`.env.example`](.env.example). `.env` is gitignored — never commit a
-filled-in copy.
-
-Already running Postgres on 5432? Set `DB_PORT` (and match `DB_URL`) rather than stopping it.
-`MINIO_PORT`, `REDIS_PORT`, `WORKER_PORT` and `BACKEND_PORT` work the same way.
-
-</details>
-
-<details>
-<summary><b>Running pieces individually</b></summary>
-
-```bash
-./tools/dev-up.sh --infra-only   # containers only; run the app yourself
-./tools/dev-up.sh --no-worker    # skip the 6 GB OMR image (uploads will fail)
-
-cd backend  && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
-cd frontend && npm ci && npm start
-```
-
-`npm start` proxies `/api` to `http://localhost:8080`. Use `npm run start-remote` to develop
-against the hosted API instead.
-
-</details>
-
----
-
-## Controls
-
-### Transport
-
-| Key | Action |
-|---|---|
-| `Space` | Play / pause |
-| `R` | Restart the current chunk |
-| `Shift` + `L` | Toggle loop |
-| `Shift` + `G` | Toggle the guide track (hands-separate stages only) |
-
-`L` and `G` need **Shift** because both are also piano keys. Without it, a learner using the
-computer keyboard as their instrument could never reach the toggles — the note would swallow the
-keystroke, silently.
-
-### QWERTY piano
-
-Two octaves, laid out the way an online piano is: naturals on the home row, accidentals sitting
-above the note they raise.
-
-```text
-  W   E       T   Y   U       O   P
-  C♯  D♯      F♯  G♯  A♯      C♯  D♯
-
-A   S   D   F   G   H   J   K   L   ;
-C   D   E   F   G   A   B   C   D   E
-
-  Z  or  [   octave down          X  or  ]   octave up
-```
-
-Default octave is C4 (middle C); the range runs C2–C6.
-
-### On-screen keyboard
-
-Click or touch any key. When the stage calls for it — or you told us you cannot read notation —
-the pitch names (`C4`, `G3`) are drawn on **only the keys the current step expects**, so the one
-you are looking for is not buried under eighty-seven others.
-
----
-
-## Testing
-
-```bash
-# Frontend
-cd frontend
-npx tsc --noEmit -p tsconfig.app.json
-npx ng build
-CHROME_BIN=$(which chromium) npx ng test --watch=false --browsers=ChromeHeadless
-
-# Backend
-cd backend
-./mvnw -B clean verify
-
-# Worker  (needs Python 3.11 or 3.12 — the package pins <3.13)
-cd worker
-python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest tests -q
-```
-
-Compiling is not the same as working. For the browser walkthrough — upload a real PDF, watch it
-ingest, play it — follow [`docs/E2E_SMOKE_TEST.md`](docs/E2E_SMOKE_TEST.md).
-
-### Ingesting a real score from the command line
-
-```bash
-SID="guest_$(openssl rand -hex 12)"
-
-SCORE=$(curl -s -F "file=@Scores/Frédéric Chopin - Prelude in E Minor.pdf" \
-             -F "title=Prelude in E Minor" -F "composer=Frédéric Chopin" \
-             -F "guestSessionId=$SID" \
-             http://localhost:8080/api/v1/scores/upload | jq -r .scoreId)
-
-# QUEUED → PROCESSING → READY. Polling is also what pulls the finished
-# document across from the worker, so keep polling until it settles.
-until curl -s "http://localhost:8080/api/v1/scores/$SCORE/status" \
-      | grep -qE '"status":"(READY|REVIEW_REQUIRED|FAILED)"'; do sleep 10; done
-
-curl -s "http://localhost:8080/api/v1/scores/$SCORE/document"       | jq .meta
-curl -s "http://localhost:8080/api/v1/scores/$SCORE/document/index" | jq '.steps | length'
-curl -s "http://localhost:8080/api/v1/scores/$SCORE/musicxml"       | head -3
-curl -s "http://localhost:8080/api/v1/scores/$SCORE/roadmap?skillLevel=BEGINNER_0" | jq .totalStages
-```
-
-No account needed at any point — anonymous uploads are attached to a guest session that lives in
-your browser, and signing up later is what makes the library durable.
 
 ---
 

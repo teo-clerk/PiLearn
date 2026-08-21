@@ -81,13 +81,20 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 ok ".env has the required values"
 
+# Java is only needed when the backend runs on the host.
 if [[ $INFRA_ONLY -eq 0 && $BACKEND_IN_DOCKER -eq 0 ]]; then
   command -v java >/dev/null 2>&1 || die "java is not on PATH. Install a JDK 21, or pass --backend-in-docker."
   java_major="$(java -version 2>&1 | head -1 | sed -E 's/.*"([0-9]+).*/\1/')"
   [[ "$java_major" -ge 21 ]] 2>/dev/null \
     || die "Java 21+ is required (found ${java_major:-unknown}). Install a JDK 21, or pass --backend-in-docker."
   ok "java $java_major"
+fi
 
+# Node is needed whenever the web app runs, which is every mode except --infra-only.
+# This check used to sit under the Java branch above, so --backend-in-docker skipped it
+# and then started `npm start` anyway — failing silently inside a log file nobody was
+# watching, on the very path the README recommends.
+if [[ $INFRA_ONLY -eq 0 ]]; then
   command -v node >/dev/null 2>&1 || die "node is not on PATH. Install Node 20+."
   ok "node $(node --version)"
 fi
